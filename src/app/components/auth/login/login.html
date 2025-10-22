@@ -1,0 +1,55 @@
+<div class="login-container">
+  <div class="login-card">
+    <mat-card class="card">
+      <div class="card-header">
+        <img src="assets/logo.png" alt="Logo Unidad Educativa" class="logo" />
+        <h2>U.E.F.B.C.S</h2>
+        <p class="subtitle">Sistema Académico</p>
+      </div>
+
+      <form (ngSubmit)="iniciarSesion()" autocomplete="off">
+        <mat-form-field appearance="outline" class="input-field">
+          <mat-label>Correo</mat-label>
+          <input
+            matInput
+            type="email"
+            name="correo"
+            [(ngModel)]="credenciales.correo"
+            placeholder="ejemplo@ejemplo.com"
+            required
+          />
+          <mat-icon matSuffix>email</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="input-field">
+          <mat-label>Contraseña</mat-label>
+          <input
+            matInput
+            type="password"
+            name="clave"
+            [(ngModel)]="credenciales.clave"
+            required
+          />
+          <mat-icon matSuffix>lock</mat-icon>
+        </mat-form-field>
+
+        <button
+          mat-raised-button
+          color="primary"
+          class="login-button"
+          [disabled]="isLoading"
+          type="submit"
+        >
+          <mat-spinner *ngIf="isLoading" [diameter]="20"></mat-spinner>
+          <span *ngIf="!isLoading">Iniciar sesión</span>
+        </button>
+
+        <div class="help-text">
+          <a routerLink="/recuperar-contrasena">¿Olvidaste tu contraseña?</a>
+        </div>
+      </form>
+    </mat-card>
+  </div>
+
+  <div class="background-image"></div>
+</div>

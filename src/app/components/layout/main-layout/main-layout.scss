@@ -1,0 +1,19 @@
+.sidenav-container {
+    height: calc(100vh - 64px); // 64px es la altura estándar del mat-toolbar
+    background: #eef2f7; // Fondo del área de contenido
+}
+
+mat-sidenav {
+    width: 250px;
+    padding-top: 10px;
+}
+
+.content-container {
+    padding: 20px;
+    overflow-y: auto; // Permite el desplazamiento dentro del contenido
+}
+
+// Para hacer que el sidebar se vea mejor
+app-sidebar {
+    width: 100%;
+}

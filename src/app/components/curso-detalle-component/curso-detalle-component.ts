@@ -24,12 +24,13 @@ import {
   Trimestre,
   NotaTrimestreInput,
   CalificacionRow,
+  
 } from '../../services/calificacion.service';
 import { AnioLectivoService } from '../../services/anio-lectivo.service';
 
 type Estado = 'cargando' | 'ok' | 'error';
 
-/** Conversión nota → cualitativa (A/B/C/D/E) */
+/** 🔤 Conversión numérica → cualitativa */
 function cualiFromPromedio(promedio: number | null | undefined): string {
   if (promedio == null || isNaN(Number(promedio))) return '';
   const p = Number(promedio);
@@ -40,7 +41,7 @@ function cualiFromPromedio(promedio: number | null | undefined): string {
   return 'E (Insuficiente)';
 }
 
-/** Form tipado para una fila de notas */
+/** ✅ Tipado del formulario de cada fila */
 type NotaForm = FormGroup<{
   estudianteId: FormControl<string>;
   promedioTrimestral: FormControl<number | null>;
@@ -110,7 +111,8 @@ type NotaForm = FormGroup<{
           <tbody>
             <tr *ngFor="let g of notasArr.controls; let i = index" [formGroupName]="i">
               <td class="estudiante">
-                {{ ((estudiantes()[i]?.nombre ?? 'Estudiante')).trim() }}
+                {{ getEstudianteNombre(estudiantes()[i]) }}
+
               </td>
 
               <td>
@@ -148,6 +150,7 @@ type NotaForm = FormGroup<{
     </form>
   `,
   styles: [`
+    :host { display:block; }
     .header {
       display: flex;
       align-items: center;
@@ -177,6 +180,7 @@ type NotaForm = FormGroup<{
       padding: 6px 8px;
       border: 1px solid #e5e7eb;
       border-radius: 6px;
+      background: #fff;
     }
     .buttons { display: flex; gap: 8px; }
     .buttons button {
@@ -216,30 +220,29 @@ type NotaForm = FormGroup<{
   `],
 })
 export class CursoDetalleComponent implements OnInit {
-  // ---- Inyecciones
+  // ---------------- Inyecciones ----------------
   private route = inject(ActivatedRoute);
   private snack = inject(MatSnackBar);
   private cursoService = inject(CursoService);
   private califService = inject(CalificacionService);
   private anioSvc = inject(AnioLectivoService);
 
-  // ✅ exponer función al template
+  // Exponer función al template
   public readonly cualiFromPromedio = cualiFromPromedio;
 
-  // ---- Estado
+  // ---------------- Estado ----------------
   estado = signal<Estado>('cargando');
   private _curso = signal<Curso | null>(null);
 
-  // Selección
+  // Selección actual
   trimestre = signal<Trimestre | null>(null);
   materiaSel = signal<string | null>(null);
-  anioLectivoId = signal<string>(''); // poblado desde Curso o fallback
+  anioLectivoId = signal<string>(''); // poblado desde curso o fallback
 
-  // Intento de autocompletar Año lectivo (evitar bucles)
   private triedFetchAnioForPrecargar = false;
   private triedFetchAnioForGuardar = false;
 
-  // ---- Formulario tipado
+  // ---------------- Formulario ----------------
   form: FormGroup<{ notas: FormArray<NotaForm> }> = new FormGroup({
     notas: new FormArray<NotaForm>([]),
   });
@@ -253,7 +256,7 @@ export class CursoDetalleComponent implements OnInit {
   cursoNombre = computed(() => this._curso()?.nombre ?? '—');
 
   constructor() {
-    // 🔁 Si cambia Trimestre o Materia, resetea valores (no estructura)
+    // 🌀 Si cambia trimestre o materia, limpia los valores
     effect(() => {
       const t = this.trimestre();
       const m = this.materiaSel();
@@ -261,15 +264,20 @@ export class CursoDetalleComponent implements OnInit {
       this.resetNotas();
     });
   }
+getEstudianteNombre(e: any): string {
+  if (!e) return '—';
+  if (typeof e === 'string') return e; // ya es ID o texto
+  if (typeof e.nombre === 'string') return e.nombre.trim();
+  if (typeof e.fullName === 'string') return e.fullName.trim();
+  return 'Estudiante';
+}
 
   ngOnInit(): void {
     const raw =
       this.route.snapshot.paramMap.get('id') ??
       this.route.snapshot.queryParamMap.get('cursoId');
+    const id = raw && raw !== 'null' && raw !== 'undefined' ? raw : '';
 
-    const id = (raw && raw !== 'null' && raw !== 'undefined') ? raw : '';
-
-    // Validamos forma de ObjectId (24 hex) para evitar /api/cursos/null
     if (!/^[0-9a-fA-F]{24}$/.test(id)) {
       this.estado.set('error');
       this.snack.open('ID de curso inválido en la URL.', 'Cerrar', { duration: 3500 });
@@ -279,19 +287,20 @@ export class CursoDetalleComponent implements OnInit {
     this.cargarCurso(id);
   }
 
-  // ---- Utilidades
+  // ---------------- Utilidades ----------------
   id(x: any): string {
     return (x && (x._id ?? x.uid)) ?? '';
   }
+
   nombreMateria(m: any): string {
     return (m && (m.nombre ?? m.titulo ?? 'Materia')) || 'Materia';
   }
 
-  // Eventos: casteo dentro del TS (no en el template)
   onTrimestre(raw: any) {
     const v = String(raw ?? '');
     this.trimestre.set(v ? (v as Trimestre) : null);
   }
+
   onMateria(raw: any) {
     const v = String(raw ?? '');
     this.materiaSel.set(v || null);
@@ -305,7 +314,7 @@ export class CursoDetalleComponent implements OnInit {
     return 'badge-d';
   }
 
-  // ========== FORM HELPERS ==========
+  // ---------------- Helpers del Form ----------------
   private newNotaGroup(estudianteId: string): NotaForm {
     return new FormGroup({
       estudianteId: new FormControl<string>(estudianteId, {
@@ -324,55 +333,46 @@ export class CursoDetalleComponent implements OnInit {
     });
   }
 
-  /** Sanea filas existentes ante posibles inconsistencias externas. */
   private ensureNotaControls() {
     for (const g of this.notasArr.controls) {
-      if (!('estudianteId' in g.controls)) {
-        g.addControl('estudianteId', new FormControl<string>('', { nonNullable: true, validators: [Validators.required] }));
-      }
-      if (!('promedioTrimestral' in g.controls)) {
-        g.addControl('promedioTrimestral', new FormControl<number | null>(null, { validators: [Validators.min(0), Validators.max(10)] }));
-      }
-      if (!('faltasJustificadas' in g.controls)) {
-        g.addControl('faltasJustificadas', new FormControl<number | null>(0, { validators: [Validators.min(0)] }));
-      }
-      if (!('faltasInjustificadas' in g.controls)) {
-        g.addControl('faltasInjustificadas', new FormControl<number | null>(0, { validators: [Validators.min(0)] }));
-      }
+      if (!g.get('estudianteId'))
+        g.addControl('estudianteId', new FormControl('', { nonNullable: true }));
+      if (!g.get('promedioTrimestral'))
+        g.addControl('promedioTrimestral', new FormControl<number | null>(null));
+      if (!g.get('faltasJustificadas'))
+        g.addControl('faltasJustificadas', new FormControl<number | null>(0));
+      if (!g.get('faltasInjustificadas'))
+        g.addControl('faltasInjustificadas', new FormControl<number | null>(0));
     }
   }
 
-  // ---- Carga de curso (pobla Año lectivo; si falta, hace fallback)
   private cargarCurso(id: string) {
     this.estado.set('cargando');
     this.cursoService.getById(id).subscribe({
       next: (c) => {
         this._curso.set(c);
-
         const al: any = (c as any)?.anioLectivo ?? null;
         const alId = (al && (al.uid ?? al._id)) ?? '';
-        if (alId) {
-          this.anioLectivoId.set(alId);
-        } else {
-          // Fallback: intentar obtener el Año lectivo actual
-          this.fetchAnioLectivoActual();
-        }
+        if (alId) this.anioLectivoId.set(alId);
+        else this.fetchAnioLectivoActual();
 
         this.armarFormulario();
         this.estado.set('ok');
       },
-      error: () => this.estado.set('error'),
+      error: () => {
+        this.estado.set('error');
+        this.snack.open('Error al cargar el curso', 'Cerrar', { duration: 3000 });
+      },
     });
   }
 
-  /** Intenta obtener el Año Lectivo actual y setear anioLectivoId */
   private fetchAnioLectivoActual(cb?: () => void) {
     this.anioSvc.obtenerActual().subscribe({
       next: (al: any) => {
         const id = (al?.uid ?? al?._id) ?? '';
         if (id) {
           this.anioLectivoId.set(id);
-          if (cb) cb();
+          cb?.();
         } else {
           this.snack.open('⚠️ No hay Año Lectivo actual configurado.', 'Cerrar', { duration: 3000 });
         }
@@ -386,19 +386,13 @@ export class CursoDetalleComponent implements OnInit {
   private armarFormulario() {
     const ests = this.estudiantes();
     const arr = new FormArray<NotaForm>([]);
-    for (const e of ests) {
-      arr.push(this.newNotaGroup(this.id(e)));
-    }
+    for (const e of ests) arr.push(this.newNotaGroup(this.id(e)));
     this.form.setControl('notas', arr);
-
-    // saneo defensivo
     this.ensureNotaControls();
   }
 
   private resetNotas() {
-    // asegurar estructura antes de tocar valores
     this.ensureNotaControls();
-
     for (const g of this.notasArr.controls) {
       g.patchValue(
         {
@@ -411,17 +405,18 @@ export class CursoDetalleComponent implements OnInit {
     }
   }
 
-  // ---- Precargar notas (auto-intento de obtener Año lectivo si falta)
+  // ---------------- Precargar notas ----------------
   precargar() {
     const t = this.trimestre();
     const mId = this.materiaSel();
     const aId = this.anioLectivoId();
-    const cursoId = (this._curso()?.uid ?? this._curso()?._id) ?? '';
+    const cursoId = this._curso()?._id ?? this._curso()?._id ?? '';
 
     if (!t || !mId) {
       this.snack.open('Selecciona Trimestre y Materia.', 'Cerrar', { duration: 2500 });
       return;
     }
+
     if (!aId) {
       if (!this.triedFetchAnioForPrecargar) {
         this.triedFetchAnioForPrecargar = true;
@@ -433,12 +428,7 @@ export class CursoDetalleComponent implements OnInit {
     }
 
     this.califService
-      .obtenerNotas({
-        cursoId: String(cursoId),
-        anioLectivoId: aId,
-        materiaId: mId,
-        trimestre: t,
-      })
+      .obtenerNotas({ cursoId, anioLectivoId: aId, materiaId: mId, trimestre: t })
       .subscribe({
         next: (rows) => {
           this.hidratarDesdeRows(rows ?? []);
@@ -454,48 +444,32 @@ export class CursoDetalleComponent implements OnInit {
   private hidratarDesdeRows(rows: CalificacionRow[]) {
     const mapByEst = new Map<string, CalificacionRow>();
     for (const r of rows) {
-      const id = (r as any)?.estudianteId
-        ?? r?.estudiante?._id
-        ?? r?.estudiante?.uid
-        ?? '';
+      const id =
+        (r as any)?.estudianteId ??
+        r?.estudiante?._id ??
+        r?.estudiante?.uid ??
+        '';
       if (id) mapByEst.set(id, r);
     }
 
     const t = this.trimestre();
     for (const g of this.notasArr.controls) {
       this.ensureNotaControls();
-
       const estId = g.controls.estudianteId.value;
-      if (!estId) continue;
-
       const row = mapByEst.get(estId);
       if (!row) continue;
 
-      let prom: number | null = null;
-      if (t && (row as any)[t] && (row as any)[t].promedioTrimestral != null) {
-        prom = Number((row as any)[t].promedioTrimestral);
-      } else if ((row as any).promedioTrimestralAnual != null) {
-        prom = Number((row as any).promedioTrimestralAnual);
-      }
-
-      g.patchValue(
-        {
-          promedioTrimestral: prom,
-          // Si manejas faltas por trimestre en el backend, mapéalas aquí:
-          // faltasJustificadas: (row as any)[t!]?.faltasJustificadas ?? 0,
-          // faltasInjustificadas: (row as any)[t!]?.faltasInjustificadas ?? 0,
-        },
-        { emitEvent: false }
-      );
+      const prom = (row as any)[t!]?.promedioTrimestral ?? null;
+      g.patchValue({ promedioTrimestral: prom ?? null }, { emitEvent: false });
     }
   }
 
-  // ---- Guardar (auto-intento de obtener Año lectivo si falta)
+  // ---------------- Guardar ----------------
   guardar() {
     const t = this.trimestre();
     const mId = this.materiaSel();
     const aId = this.anioLectivoId();
-    const cursoId = (this._curso()?.uid ?? this._curso()?._id) ?? '';
+    const cursoId = this._curso()?._id ?? this._curso()?._id ?? '';
 
     if (!t || !mId) {
       this.snack.open('Selecciona Trimestre y Materia.', 'Cerrar', { duration: 2500 });
@@ -505,6 +479,7 @@ export class CursoDetalleComponent implements OnInit {
       this.snack.open('Revisa los campos (0–10).', 'Cerrar', { duration: 3000 });
       return;
     }
+
     if (!aId) {
       if (!this.triedFetchAnioForGuardar) {
         this.triedFetchAnioForGuardar = true;
@@ -515,7 +490,6 @@ export class CursoDetalleComponent implements OnInit {
       return;
     }
 
-    // asegurar estructura antes de leer valores
     this.ensureNotaControls();
 
     const notas: NotaTrimestreInput[] = this.notasArr.controls.map((g) => ({
@@ -527,7 +501,7 @@ export class CursoDetalleComponent implements OnInit {
 
     this.califService
       .cargarTrimestreBulk({
-        cursoId: String(cursoId),
+        cursoId,
         anioLectivoId: aId,
         materiaId: mId,
         trimestre: t!,

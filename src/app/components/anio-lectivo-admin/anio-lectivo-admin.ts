@@ -1,9 +1,9 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+// src/app/components/anio-lectivo-admin/anio-lectivo-admin.component.ts
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
-// Material
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -13,7 +13,6 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 
 import { AnioLectivoService, AnioLectivo } from '../../services/anio-lectivo.service';
-import { formatDate } from '@angular/common';
 
 @Component({
   selector: 'app-anio-lectivo-admin',
@@ -33,27 +32,28 @@ import { formatDate } from '@angular/common';
   template: `
   <mat-card class="p-4">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-xl font-semibold">Años lectivos</h2>
+      <h2 class="text-xl font-semibold">Gestión de Años Lectivos</h2>
       <button mat-raised-button color="primary" (click)="recargar()" [disabled]="isBusy()">
         <mat-icon>refresh</mat-icon>
         Recargar
       </button>
     </div>
 
+    <!-- FORMULARIO -->
     <form class="grid md:grid-cols-4 gap-4 items-end mb-6" [formGroup]="form" (ngSubmit)="guardar()">
       <mat-form-field appearance="outline">
         <mat-label>Nombre</mat-label>
-        <input matInput formControlName="nombre" placeholder="2025 - 2026" />
+        <input matInput formControlName="nombre" placeholder="Ej: 2025 - 2026" />
       </mat-form-field>
 
       <mat-form-field appearance="outline">
-        <mat-label>Fecha inicio</mat-label>
-        <input matInput type="date" formControlName="fechaInicio" />
+        <mat-label>Año Inicio</mat-label>
+        <input matInput type="number" formControlName="anioInicio" placeholder="2025" />
       </mat-form-field>
 
       <mat-form-field appearance="outline">
-        <mat-label>Fecha fin</mat-label>
-        <input matInput type="date" formControlName="fechaFin" />
+        <mat-label>Año Fin</mat-label>
+        <input matInput type="number" formControlName="anioFin" placeholder="2026" />
       </mat-form-field>
 
       <div class="flex gap-2">
@@ -69,9 +69,9 @@ import { formatDate } from '@angular/common';
 
     <mat-progress-bar *ngIf="isBusy()" mode="indeterminate"></mat-progress-bar>
 
+    <!-- TABLA -->
     <div class="overflow-auto">
       <table mat-table [dataSource]="items()" class="w-full">
-
         <!-- Nombre -->
         <ng-container matColumnDef="nombre">
           <th mat-header-cell *matHeaderCellDef> Nombre </th>
@@ -82,20 +82,20 @@ import { formatDate } from '@angular/common';
         <ng-container matColumnDef="rango">
           <th mat-header-cell *matHeaderCellDef> Rango </th>
           <td mat-cell *matCellDef="let r">
-            {{ toDate(r.fechaInicio) | date:'dd/MM/yyyy' }} — {{ toDate(r.fechaFin) | date:'dd/MM/yyyy' }}
+            {{ r.anioInicio }} — {{ r.anioFin }}
           </td>
         </ng-container>
 
-        <!-- Actual -->
-        <ng-container matColumnDef="actual">
-          <th mat-header-cell *matHeaderCellDef> Actual </th>
+        <!-- Estado -->
+        <ng-container matColumnDef="estado">
+          <th mat-header-cell *matHeaderCellDef> Estado </th>
           <td mat-cell *matCellDef="let r">
             <span class="px-2 py-1 rounded"
-                  [class.bg-green-100]="r.actual"
-                  [class.text-green-800]="r.actual"
-                  [class.bg-gray-100]="!r.actual"
-                  [class.text-gray-800]="!r.actual">
-              {{ r.actual ? 'Sí' : 'No' }}
+                  [class.bg-green-100]="r.estado"
+                  [class.text-green-800]="r.estado"
+                  [class.bg-gray-100]="!r.estado"
+                  [class.text-gray-800]="!r.estado">
+              {{ r.estado ? 'Activo' : 'Inactivo' }}
             </span>
           </td>
         </ng-container>
@@ -113,9 +113,9 @@ import { formatDate } from '@angular/common';
             </button>
 
             <button mat-raised-button color="accent" class="ml-2"
-                    (click)="marcarComoActual(r)" [disabled]="isBusy() || r.actual">
+                    (click)="marcarComoActual(r)" [disabled]="isBusy() || r.estado">
               <mat-icon>check_circle</mat-icon>
-              Actual
+              Marcar actual
             </button>
           </td>
         </ng-container>
@@ -128,7 +128,7 @@ import { formatDate } from '@angular/common';
   `,
   styles: [`
     :host { display:block; }
-    table { min-width: 680px; }
+    table { min-width: 700px; }
   `]
 })
 export class AnioLectivoAdminComponent implements OnInit {
@@ -140,20 +140,16 @@ export class AnioLectivoAdminComponent implements OnInit {
   items = signal<AnioLectivo[]>([]);
   editId = signal<string | null>(null);
 
-  displayedColumns = ['nombre', 'rango', 'actual', 'acciones'];
+  displayedColumns = ['nombre', 'rango', 'estado', 'acciones'];
 
   form = this.fb.group({
     nombre: ['', [Validators.required, Validators.minLength(4)]],
-    fechaInicio: ['', Validators.required],
-    fechaFin: ['', Validators.required],
+    anioInicio: ['', [Validators.required]],
+    anioFin: ['', [Validators.required]],
   });
 
   ngOnInit(): void {
     this.cargar();
-  }
-
-  toDate(d: string | Date): Date {
-    return typeof d === 'string' ? new Date(d) : d;
   }
 
   recargar(): void {
@@ -162,7 +158,7 @@ export class AnioLectivoAdminComponent implements OnInit {
 
   private cargar(showSnack = false): void {
     this.isBusy.set(true);
-    this.svc.listar().subscribe({
+    this.svc.getAll().subscribe({
       next: (rows) => {
         this.items.set(rows ?? []);
         if (showSnack) this.snack.open('Datos actualizados', 'OK', { duration: 1500 });
@@ -176,13 +172,11 @@ export class AnioLectivoAdminComponent implements OnInit {
   }
 
   editar(r: AnioLectivo): void {
-    this.editId.set(r._id);
-    const fi = this.toDate(r.fechaInicio);
-    const ff = this.toDate(r.fechaFin);
+    this.editId.set(r._id ?? r.uid ?? null);
     this.form.patchValue({
       nombre: r.nombre,
-      fechaInicio: formatDate(fi, 'yyyy-MM-dd', 'en-US'),
-      fechaFin: formatDate(ff, 'yyyy-MM-dd', 'en-US'),
+      anioInicio: String(r.fechaInicio),
+      anioFin: String(r.fechaFin),
     });
   }
 
@@ -192,21 +186,28 @@ export class AnioLectivoAdminComponent implements OnInit {
   }
 
   guardar(): void {
-    if (this.form.invalid) return;
+    if (this.form.invalid) {
+      this.snack.open('Complete todos los campos.', 'Cerrar', { duration: 2000 });
+      return;
+    }
+
     const payload = {
-      nombre: this.form.value.nombre!,
-      fechaInicio: this.form.value.fechaInicio!,
-      fechaFin: this.form.value.fechaFin!,
+      nombre: String(this.form.value.nombre),
+      anioInicio: Number(this.form.value.anioInicio),
+      anioFin: Number(this.form.value.anioFin),
+      estado: false, // por defecto inactivo
     };
 
     this.isBusy.set(true);
-
     const id = this.editId();
-    const obs = id ? this.svc.actualizar(id, payload) : this.svc.crear(payload);
+
+    const obs = id
+      ? this.svc.update(id, payload)
+      : this.svc.create(payload);
 
     obs.subscribe({
       next: () => {
-        this.snack.open(id ? 'Actualizado' : 'Creado', 'OK', { duration: 1500 });
+        this.snack.open(id ? 'Año lectivo actualizado' : 'Año lectivo creado', 'OK', { duration: 1500 });
         this.cancelarEdicion();
         this.cargar();
       },
@@ -220,7 +221,7 @@ export class AnioLectivoAdminComponent implements OnInit {
   eliminar(r: AnioLectivo): void {
     if (!confirm(`¿Eliminar el año lectivo "${r.nombre}"?`)) return;
     this.isBusy.set(true);
-    this.svc.eliminar(r._id).subscribe({
+    this.svc.delete(r._id ?? r.uid ?? '').subscribe({
       next: () => {
         this.snack.open('Eliminado', 'OK', { duration: 1500 });
         this.cargar();
@@ -232,18 +233,30 @@ export class AnioLectivoAdminComponent implements OnInit {
     });
   }
 
+  /**
+   * 🔥 Marca un año lectivo como actual y desactiva los demás.
+   */
   marcarComoActual(r: AnioLectivo): void {
-    if (r.actual) return; // idempotencia en UI
+    if (r.estado) return;
     this.isBusy.set(true);
-    this.svc.marcarActual(r._id).subscribe({
-      next: () => {
+
+    // Paso 1: Desactivar todos los demás
+    const otros = this.items().filter(x => (x._id ?? x.uid) !== (r._id ?? r.uid));
+    const desactivar = otros.map(o =>
+      this.svc.update(o._id ?? o.uid ?? '', { estado: false })
+    );
+
+    // Paso 2: Activar el seleccionado
+    const activar = this.svc.update(r._id ?? r.uid ?? '', { estado: true });
+
+    Promise.all([...desactivar.map(obs => obs.toPromise()), activar.toPromise()])
+      .then(() => {
         this.snack.open(`"${r.nombre}" marcado como actual`, 'OK', { duration: 1500 });
         this.cargar();
-      },
-      error: (e) => {
-        this.isBusy.set(false);
+      })
+      .catch((e) => {
         this.snack.open(e?.error?.message || 'Error al marcar como actual', 'Cerrar', { duration: 3000 });
-      }
-    });
+        this.isBusy.set(false);
+      });
   }
 }

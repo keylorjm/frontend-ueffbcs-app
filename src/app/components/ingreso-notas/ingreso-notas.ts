@@ -1,7 +1,14 @@
-import { Component, ChangeDetectionStrategy, inject, signal } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  FormArray,
+  FormBuilder,
+  FormControl,
+  FormGroup,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
 import { MatTableModule } from '@angular/material/table';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -10,91 +17,119 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
 import { CursoService, Curso } from '../../services/curso.service';
 import { Estudiante } from '../../services/estudiante.service';
-import { CalificacionService, NotaTrimestreInput, Trimestre } from '../../services/calificacion.service';
+import {
+  CalificacionService,
+  Trimestre,
+  NotaTrimestreInput,
+} from '../../services/calificacion.service';
+
+/** Conversión nota → cualitativa (solo visual) */
+function cualiFromPromedio(prom: number | null | undefined): string {
+  if (prom == null || Number.isNaN(Number(prom))) return '';
+  const p = Number(prom);
+  if (p >= 9) return 'A (Excelente)';
+  if (p >= 8) return 'B (Muy bueno)';
+  if (p >= 7) return 'C (Bueno)';
+  if (p >= 6) return 'D (Suficiente)';
+  return 'E (Insuficiente)';
+}
+
+/** Formulario por estudiante (según backend actual) */
+type NotaForm = FormGroup<{
+  estudianteId: FormControl<string>;
+  promedioTrimestral: FormControl<number | null>;
+  faltasJustificadas: FormControl<number | null>;
+  faltasInjustificadas: FormControl<number | null>;
+}>;
 
 @Component({
   standalone: true,
   selector: 'app-ingreso-notas',
   imports: [
-    CommonModule, ReactiveFormsModule,
-    MatTableModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatSnackBarModule
+    CommonModule,
+    ReactiveFormsModule,
+    MatTableModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatButtonModule,
+    MatSnackBarModule,
   ],
   template: `
     <section class="panel" *ngIf="form">
-      <h2>Ingreso de notas · {{ curso()?.nombre }}</h2>
-      <p>Trimestre: <strong>{{ trimestre }}</strong> · Materia: <strong>{{ materiaId }}</strong></p>
+      <h2>Ingreso de Notas · {{ cursoNombre() }}</h2>
 
-      <!-- Importante: form + formArrayName + formGroupName para evitar AbstractControl|null -->
+      <select [value]="trimestre()" (change)="onTrimestre($event)">
+  <option value="T1">T1</option>
+  <option value="T2">T2</option>
+  <option value="T3">T3</option>
+</select>
+
+
+      <div class="actions-top">
+        <button mat-stroked-button type="button" (click)="precargar()">Precargar</button>
+      </div>
+
       <form [formGroup]="form" (ngSubmit)="guardar()">
         <div formArrayName="notas">
           <table mat-table [dataSource]="estudiantes()" class="mat-elevation-z2">
+            <!-- Estudiante -->
             <ng-container matColumnDef="estudiante">
-              <th mat-header-cell *matHeaderCellDef> Estudiante </th>
+              <th mat-header-cell *matHeaderCellDef>Estudiante</th>
               <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
-                {{ e?.nombre }} {{ e?.apellido }}
+                {{ e?.nombre }}
                 <input type="hidden" formControlName="estudianteId" />
               </td>
             </ng-container>
 
-            <ng-container matColumnDef="ai">
-              <th mat-header-cell *matHeaderCellDef> AI </th>
+            <!-- PromedioTrimestral -->
+            <ng-container matColumnDef="prom">
+              <th mat-header-cell *matHeaderCellDef>Nota (0–10)</th>
               <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
                 <mat-form-field appearance="outline">
-                  <input matInput type="number" min="0" max="10" formControlName="actividadesIndividuales">
+                  <input
+                    matInput
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="10"
+                    formControlName="promedioTrimestral"
+                    placeholder="0 - 10"
+                  />
                 </mat-form-field>
               </td>
             </ng-container>
 
-            <ng-container matColumnDef="ag">
-              <th mat-header-cell *matHeaderCellDef> AG </th>
-              <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
-                <mat-form-field appearance="outline">
-                  <input matInput type="number" min="0" max="10" formControlName="actividadesGrupales">
-                </mat-form-field>
-              </td>
-            </ng-container>
-
-            <ng-container matColumnDef="pi">
-              <th mat-header-cell *matHeaderCellDef> PI </th>
-              <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
-                <mat-form-field appearance="outline">
-                  <input matInput type="number" min="0" max="10" formControlName="proyectoIntegrador">
-                </mat-form-field>
-              </td>
-            </ng-container>
-
-            <ng-container matColumnDef="ep">
-              <th mat-header-cell *matHeaderCellDef> EP </th>
-              <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
-                <mat-form-field appearance="outline">
-                  <input matInput type="number" min="0" max="10" formControlName="evaluacionPeriodo">
-                </mat-form-field>
-              </td>
-            </ng-container>
-
-            <ng-container matColumnDef="fj">
-              <th mat-header-cell *matHeaderCellDef> FJ </th>
-              <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
-                <mat-form-field appearance="outline">
-                  <input matInput type="number" min="0" formControlName="faltasJustificadas">
-                </mat-form-field>
-              </td>
-            </ng-container>
-
-            <ng-container matColumnDef="fi">
-              <th mat-header-cell *matHeaderCellDef> FI </th>
-              <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
-                <mat-form-field appearance="outline">
-                  <input matInput type="number" min="0" formControlName="faltasInjustificadas">
-                </mat-form-field>
-              </td>
-            </ng-container>
-
+            <!-- Cualitativa (visual) -->
             <ng-container matColumnDef="cualit">
-              <th mat-header-cell *matHeaderCellDef> Cualitativa </th>
+              <th mat-header-cell *matHeaderCellDef>Cualitativa</th>
               <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
-                <mat-form-field appearance="outline" class="cualit">
-                  <input matInput placeholder="Observación" formControlName="calificacionCualitativa">
+                <span
+                  class="badge"
+                  [ngClass]="
+                    badgeClass(cualiFromPromedio(notasArr.at(i).get('promedioTrimestral')?.value))
+                  "
+                >
+                  {{ cualiFromPromedio(notasArr.at(i).get('promedioTrimestral')?.value) || '—' }}
+                </span>
+              </td>
+            </ng-container>
+
+            <!-- Faltas J -->
+            <ng-container matColumnDef="fj">
+              <th mat-header-cell *matHeaderCellDef>FJ</th>
+              <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
+                <mat-form-field appearance="outline">
+                  <input matInput type="number" min="0" formControlName="faltasJustificadas" />
+                </mat-form-field>
+              </td>
+            </ng-container>
+
+            <!-- Faltas I -->
+            <ng-container matColumnDef="fi">
+              <th mat-header-cell *matHeaderCellDef>FI</th>
+              <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
+                <mat-form-field appearance="outline">
+                  <input matInput type="number" min="0" formControlName="faltasInjustificadas" />
                 </mat-form-field>
               </td>
             </ng-container>
@@ -106,18 +141,67 @@ import { CalificacionService, NotaTrimestreInput, Trimestre } from '../../servic
 
         <div class="actions">
           <button mat-raised-button color="primary" type="submit">Guardar</button>
-          <button mat-button type="button" (click)="router.navigate(['/profesor/curso', cursoId, 'notas'])">Cancelar</button>
+          <button
+            mat-button
+            type="button"
+            (click)="router.navigate(['/profesor/curso', cursoId, 'notas'])"
+          >
+            Cancelar
+          </button>
         </div>
       </form>
     </section>
   `,
-  styles: [`
-    .panel { display: grid; gap: 16px; }
-    table { width: 100%; }
-    mat-form-field { width: 110px; }
-    mat-form-field.cualit { width: 220px; }
-    .actions { display: flex; gap: 12px; }
-  `],
+  styles: [
+    `
+      .panel {
+        display: grid;
+        gap: 16px;
+      }
+      .context {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+      }
+      .actions-top {
+        margin-top: -8px;
+      }
+      table {
+        width: 100%;
+      }
+      mat-form-field {
+        width: 130px;
+      }
+      .actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 999px;
+        background: #f3f4f6;
+        font-size: 12px;
+      }
+      .badge-a {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .badge-b {
+        background: #e0f2fe;
+        color: #075985;
+      }
+      .badge-c {
+        background: #fef9c3;
+        color: #854d0e;
+      }
+      .badge-d {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+    `,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class IngresoNotasComponent {
@@ -129,132 +213,175 @@ export class IngresoNotasComponent {
   private cursoService = inject(CursoService);
   private califService = inject(CalificacionService);
 
-  // Params/Query
+  // -------- Contexto desde la URL (backend espera: cursoId, anioLectivoId, materiaId, trimestre)
   cursoId = this.route.snapshot.paramMap.get('id')!;
-  trimestre = (this.route.snapshot.queryParamMap.get('trimestre') as Trimestre) ?? 'T1';
-  materiaId = this.route.snapshot.queryParamMap.get('materiaId')!;
-  estudianteId = this.route.snapshot.queryParamMap.get('estudianteId'); // si viene => individual
+  materiaId = this.route.snapshot.queryParamMap.get('materiaId') || '';
   anioLectivoId = this.route.snapshot.queryParamMap.get('anioLectivoId') || '';
+  trimestre = signal<Trimestre>(
+    (this.route.snapshot.queryParamMap.get('trimestre') as Trimestre) || 'T1'
+  );
 
+  // -------- Estado UI
   curso = signal<Curso | null>(null);
   estudiantes = signal<Estudiante[]>([]);
-  displayed = ['estudiante', 'ai', 'ag', 'pi', 'ep', 'fj', 'fi', 'cualit'] as const;
+  cursoNombre = computed(() => this.curso()?.nombre ?? '—');
 
+  displayed = ['estudiante', 'prom', 'cualit', 'fj', 'fi'] as const;
+
+  // -------- Formulario (una fila por estudiante)
   form = this.fb.group({
-    notas: this.fb.array<FormGroup<{
-      estudianteId: FormControl<string>;
-      actividadesIndividuales: FormControl<number | null>;
-      actividadesGrupales:    FormControl<number | null>;
-      proyectoIntegrador:     FormControl<number | null>;
-      evaluacionPeriodo:      FormControl<number | null>;
-      faltasJustificadas:     FormControl<number | null>;
-      faltasInjustificadas:   FormControl<number | null>;
-      calificacionCualitativa:FormControl<string | null>;
-    }>>([])
+    notas: this.fb.array<NotaForm>([]),
   });
 
-  get notasArr() { return this.form.get('notas') as FormArray; }
+  get notasArr(): FormArray<NotaForm> {
+    return this.form.get('notas') as FormArray<NotaForm>;
+  }
 
-  ngOnInit() {
-    this.cursoService.getById(this.cursoId).subscribe((curso) => {
-      this.curso.set(curso);
-      const all = (curso.estudiantes ?? []) as any[];
-      const filtered = this.estudianteId
-        ? all.filter(e => (e.uid ?? e._id) === this.estudianteId)
-        : all;
-      this.estudiantes.set(filtered);
+  // -------- Helpers UI
+  cualiFromPromedio = cualiFromPromedio;
+  badgeClass(q: string): string {
+    if (!q) return '';
+    if (q.startsWith('A')) return 'badge-a';
+    if (q.startsWith('B')) return 'badge-b';
+    if (q.startsWith('C')) return 'badge-c';
+    return 'badge-d';
+  }
 
-      if (!this.anioLectivoId) {
-        this.anioLectivoId =
-          (curso as any).anioLectivo?.uid ??
-          (curso as any).anioLectivo?._id ??
-          this.anioLectivoId;
-      }
-
-      this.armarFormulario();
-      this.precargarNotas();
+  constructor() {
+    // Cargar curso + estudiantes
+    this.cursoService.getById(this.cursoId).subscribe({
+      next: (c) => {
+        this.curso.set(c);
+        const ests = (c.estudiantes ?? []) as any[];
+        this.estudiantes.set(ests);
+        // si no viene anioLectivoId en la URL, intenta tomarlo del curso (populate)
+        if (!this.anioLectivoId) {
+          const al = (c as any)?.anioLectivo;
+          this.anioLectivoId = (al?.uid ?? al?._id) || '';
+        }
+        this.armarFormulario();
+        this.precargar(); // intentamos precargar al abrir
+      },
+      error: () => this.snack.open('No se pudo cargar el curso', 'Cerrar', { duration: 3000 }),
     });
   }
 
-  private armarFormulario() {
+  // construir form array
+  private armarFormulario(): void {
     this.notasArr.clear();
     for (const e of this.estudiantes()) {
-      this.notasArr.push(this.fb.group({
-        estudianteId: this.fb.control<string>((e as any).uid ?? (e as any)._id!, { nonNullable: true }),
-        actividadesIndividuales: this.fb.control<number | null>(null, [Validators.min(0), Validators.max(10)]),
-        actividadesGrupales:    this.fb.control<number | null>(null, [Validators.min(0), Validators.max(10)]),
-        proyectoIntegrador:     this.fb.control<number | null>(null, [Validators.min(0), Validators.max(10)]),
-        evaluacionPeriodo:      this.fb.control<number | null>(null, [Validators.min(0), Validators.max(10)]),
-        faltasJustificadas:     this.fb.control<number | null>(0),
-        faltasInjustificadas:   this.fb.control<number | null>(0),
-        calificacionCualitativa:this.fb.control<string | null>(null),
-      }));
+      const estId = (e as any).uid ?? (e as any)._id;
+      this.notasArr.push(this.newNotaForm(estId));
     }
   }
 
-  private precargarNotas() {
-    if (!this.anioLectivoId) return;
-    this.califService.obtenerNotas({
-      cursoId: this.cursoId,
-      anioLectivoId: this.anioLectivoId,
-      materiaId: this.materiaId,
-      trimestre: this.trimestre,
-    }).subscribe((rows) => {
-      const mapByEst: Record<string, any> = {};
-      for (const r of rows) {
-        const id = r?.estudiante?.uid ?? r?.estudiante?._id;
-        mapByEst[id] = r;
-      }
-      this.estudiantes().forEach((e, i) => {
-        const k = (e as any).uid ?? (e as any)._id;
-        const row = mapByEst[k];
-        if (!row) return;
-        const t = row[this.trimestre] || {};
-        this.notasArr.at(i).patchValue({
-          actividadesIndividuales: t.actividadesIndividuales ?? null,
-          actividadesGrupales:    t.actividadesGrupales ?? null,
-          proyectoIntegrador:     t.proyectoIntegrador ?? null,
-          evaluacionPeriodo:      t.evaluacionPeriodo ?? null,
-          faltasJustificadas:     t.faltasJustificadas ?? 0,
-          faltasInjustificadas:   t.faltasInjustificadas ?? 0,
-          calificacionCualitativa:t.calificacionCualitativa ?? null,
-        }, { emitEvent: false });
-      });
+  private newNotaForm(estudianteId: string): NotaForm {
+    return this.fb.group({
+      estudianteId: this.fb.control<string>(estudianteId, {
+        nonNullable: true,
+        validators: [Validators.required],
+      }),
+      promedioTrimestral: this.fb.control<number | null>(null, [
+        Validators.min(0),
+        Validators.max(10),
+      ]),
+      faltasJustificadas: this.fb.control<number | null>(0, [Validators.min(0)]),
+      faltasInjustificadas: this.fb.control<number | null>(0, [Validators.min(0)]),
     });
   }
 
+  onTrimestre(value: any) {
+    const t = String(value || 'T1') as Trimestre;
+    this.trimestre.set(t);
+    // no reseteamos estructura, sólo valores visibles
+    for (const g of this.notasArr.controls) {
+      g.patchValue(
+        { promedioTrimestral: null, faltasJustificadas: 0, faltasInjustificadas: 0 },
+        { emitEvent: false }
+      );
+    }
+  }
+
+  /** Precarga desde GET /api/calificaciones con {cursoId, anioLectivoId, materiaId, trimestre} */
+  precargar() {
+    if (!this.anioLectivoId || !this.materiaId) {
+      this.snack.open('Falta Año Lectivo o Materia en la URL.', 'Cerrar', { duration: 3000 });
+      return;
+    }
+    this.califService
+      .obtenerNotas({
+        cursoId: this.cursoId,
+        anioLectivoId: this.anioLectivoId,
+        materiaId: this.materiaId,
+        trimestre: this.trimestre(),
+      })
+      .subscribe({
+        next: (rows) => {
+          // rows = Calificacion[] con campos T1/T2/T3
+          const byEst: Record<string, any> = {};
+          for (const r of rows) {
+            const id = r?.estudiante?.uid ?? r?.estudiante?._id;
+            if (id) byEst[id] = r;
+          }
+          const tri = this.trimestre();
+          this.estudiantes().forEach((e, idx) => {
+            const k = (e as any).uid ?? (e as any)._id;
+            const row = byEst[k];
+            if (!row) return;
+            const t = (row as any)[tri] || {};
+            this.notasArr.at(idx).patchValue(
+              {
+                promedioTrimestral: t.promedioTrimestral ?? null,
+                faltasJustificadas: t.faltasJustificadas ?? 0,
+                faltasInjustificadas: t.faltasInjustificadas ?? 0,
+              },
+              { emitEvent: false }
+            );
+          });
+          this.snack.open('Notas precargadas', 'OK', { duration: 1800 });
+        },
+        error: (e) => {
+          const msg = e?.error?.message || 'No se pudieron precargar las notas';
+          this.snack.open(`❌ ${msg}`, 'Cerrar', { duration: 3500 });
+        },
+      });
+  }
+
+  /** Guarda con POST /api/calificaciones/bulk-trimestre */
   guardar() {
     if (this.form.invalid) {
       this.snack.open('Revisa los campos (0–10).', 'Cerrar', { duration: 3000 });
       return;
     }
+    if (!this.anioLectivoId || !this.materiaId) {
+      this.snack.open('Falta Año Lectivo o Materia en la URL.', 'Cerrar', { duration: 3000 });
+      return;
+    }
 
-    const notas: NotaTrimestreInput[] = (this.notasArr.value as any[]).map(v => ({
-      estudianteId: v!.estudianteId!,
-      actividadesIndividuales: v!.actividadesIndividuales ?? 0,
-      actividadesGrupales:    v!.actividadesGrupales ?? 0,
-      proyectoIntegrador:     v!.proyectoIntegrador ?? 0,
-      evaluacionPeriodo:      v!.evaluacionPeriodo ?? 0,
-      faltasJustificadas:     v!.faltasJustificadas ?? 0,
-      faltasInjustificadas:   v!.faltasInjustificadas ?? 0,
-      calificacionCualitativa: v!.calificacionCualitativa ?? '',
+    const notas: NotaTrimestreInput[] = this.notasArr.value.map((v: any) => ({
+      estudianteId: v.estudianteId,
+      promedioTrimestral: v.promedioTrimestral ?? 0,
+      faltasJustificadas: v.faltasJustificadas ?? 0,
+      faltasInjustificadas: v.faltasInjustificadas ?? 0,
     }));
 
-    this.califService.cargarTrimestreBulk({
-      cursoId: this.cursoId,
-      anioLectivoId: this.anioLectivoId || '<<anio-actual>>',
-      materiaId: this.materiaId,
-      trimestre: this.trimestre,
-      notas,
-    }).subscribe({
-      next: () => {
-        this.snack.open('✅ Notas guardadas', 'OK', { duration: 2500 });
-        this.router.navigate(['/profesor/curso', this.cursoId, 'notas']);
-      },
-      error: (e) => {
-        const msg = e?.error?.message ?? 'Error guardando notas';
-        this.snack.open(`❌ ${msg}`, 'Cerrar', { duration: 4000 });
-      }
-    });
+    this.califService
+      .cargarTrimestreBulk({
+        cursoId: this.cursoId,
+        anioLectivoId: this.anioLectivoId,
+        materiaId: this.materiaId,
+        trimestre: this.trimestre(),
+        notas,
+      })
+      .subscribe({
+        next: () => {
+          this.snack.open('✅ Notas guardadas', 'OK', { duration: 2200 });
+          this.router.navigate(['/profesor/curso', this.cursoId, 'notas']);
+        },
+        error: (e) => {
+          const msg = e?.error?.message || 'Error guardando notas';
+          this.snack.open(`❌ ${msg}`, 'Cerrar', { duration: 3500 });
+        },
+      });
   }
 }

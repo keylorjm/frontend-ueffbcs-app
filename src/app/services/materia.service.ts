@@ -1,63 +1,44 @@
-// src/app/services/materia.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 
-// Estructura mínima del Profesor que viene populada desde el backend
-export interface Profesor {
-    _id: string; // ID del usuario/profesor
-    nombre: string;
-}
-
-// Interfaz de Materia: incluye la descripción y el objeto Profesor
 export interface Materia {
-    uid?: string; 
-    nombre: string;
-    descripcion: string;
-    profesor: Profesor; // Objeto del profesor populado
-    estado?: boolean;
+  _id?: string;
+  uid?: string;
+  nombre: string;
+  descripcion?: string;
+  profesor: string; // ObjectId de Usuario (profesor)
+  estado?: boolean;
 }
 
-// Interfaz para la respuesta completa de la API
-interface MateriaResponse {
-    ok: boolean;
-    total: number;
-    materias: Materia[]; // El array que debemos extraer
+interface MateriasResponse {
+  ok: boolean;
+  total?: number;
+  materias: Materia[];
 }
 
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable({ providedIn: 'root' })
 export class MateriaService {
-  getById(id: Materia): any {
-      throw new Error('Method not implemented.');
-  }
   private api = inject(ApiService);
-  private basePath = 'materias'; 
+  private base = 'materias';
 
-  // OBTENER TODAS LAS MATERIAS (GET)
   getAll(): Observable<Materia[]> {
-    return this.api.get<MateriaResponse>(this.basePath).pipe(
-      // CRÍTICO: Extrae solo el array 'materias'
-      map(response => response.materias) 
-    );
+    return this.api.get<MateriasResponse>(this.base) as any;
   }
 
-  // CREAR MATERIA (POST)
-  create(materia: Partial<Materia>): Observable<Materia> {
-    // Nota: Aquí se envía solo el 'uid' del profesor, no el objeto completo
-    return this.api.post<Materia>(this.basePath, materia);
+  getById(id: string): Observable<Materia> {
+    return this.api.get<Materia>(`${this.base}/${id}`);
   }
 
-  // ACTUALIZAR MATERIA (PUT)
-  update(id: string, materia: Partial<Materia>): Observable<Materia> {
-    return this.api.put<Materia>(`${this.basePath}/${id}`, materia);
+  create(m: { nombre: string; descripcion?: string; profesor: string }): Observable<Materia> {
+    return this.api.post<Materia>(this.base, m);
   }
 
-  // ELIMINAR MATERIA (DELETE - Lógico)
+  update(id: string, patch: Partial<Materia>): Observable<Materia> {
+    return this.api.put<Materia>(`${this.base}/${id}`, patch);
+  }
+
   delete(id: string): Observable<any> {
-    return this.api.delete<any>(`${this.basePath}/${id}`);
+    return this.api.delete<any>(`${this.base}/${id}`);
   }
 }

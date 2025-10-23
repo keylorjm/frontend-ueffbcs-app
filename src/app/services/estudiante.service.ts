@@ -6,7 +6,7 @@ import { ApiService } from './api.service';
 
 // Interface for the array item (CORREGIDA)
 export interface Estudiante {
-  uid?: string;      // el backend expone uid (mapeo de _id)
+  uid?: string;      
   nombre: string;
   email: string;
   cedula: string;

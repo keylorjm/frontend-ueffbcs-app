@@ -1,65 +1,121 @@
+// src/app/services/anio-lectivo.service.ts
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { map, Observable, throwError } from 'rxjs';
-import { environment } from '../environments/environment';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
+import { ApiService } from './api.service';
 
+/** Interfaz del Año Lectivo */
 export interface AnioLectivo {
-  _id: string;
+  _id?: string;
   uid?: string;
-  nombre: string;
-  fechaInicio: string | Date;
-  fechaFin: string | Date;
-  actual: boolean;
-  // si tu backend usa "activo" boolean o "estado" string, ajusta el tipo
-  activo?: boolean;
-  estado?: 'activo' | 'inactivo';
-  createdAt?: string;
-  updatedAt?: string;
+  nombre: string;      // p.ej. "2025 - 2026" o "2025"
+  fechaInicio: string; // ISO "YYYY-MM-DD"
+  fechaFin: string;    // ISO "YYYY-MM-DD"
+  estado: boolean;
+  actual?: boolean;
 }
+
+/** Respuesta backend */
+interface AnioLectivoResponse {
+  ok: boolean;
+  total?: number;
+  aniosLectivos: AnioLectivo[];
+}
+
+/** Tipos de payload aceptados (flexibles) */
+type PayloadConFechas = {
+  nombre: string;
+  fechaInicio: string;  // ISO
+  fechaFin: string;     // ISO
+  estado: boolean;
+  actual?: boolean;
+};
+
+type PayloadConAnios = {
+  nombre: string;
+  anioInicio: number;   // 2025
+  anioFin: number;      // 2026
+  estado: boolean;
+  actual?: boolean;
+};
+
+type CreatePayload = PayloadConFechas | PayloadConAnios;
+type UpdatePayload = Partial<PayloadConFechas & PayloadConAnios>;
 
 @Injectable({ providedIn: 'root' })
 export class AnioLectivoService {
-  private readonly http = inject(HttpClient);
-  private readonly base = `${environment.apiUrl}/anios-lectivos`;
+  private api = inject(ApiService);
+  private base = 'aniolectivo';
 
-  /** GET /api/anios-lectivos */
-  listar(): Observable<AnioLectivo[]> {
-    return this.http.get<any>(this.base).pipe(map(r => r?.data ?? []));
+  /** ================= Helpers ================= */
+
+  /** Normaliza datos de entrada a formato con fechaInicio/fechaFin ISO */
+  private normalizePayload(input: CreatePayload | UpdatePayload): PayloadConFechas | Partial<PayloadConFechas> {
+    const out: any = { ...input };
+
+    const hasFechas = typeof (input as any).fechaInicio === 'string' || typeof (input as any).fechaFin === 'string';
+    const hasAnios  = typeof (input as any).anioInicio === 'number' || typeof (input as any).anioFin === 'number';
+
+    if (hasAnios && !hasFechas) {
+      const ai = (input as any).anioInicio;
+      const af = (input as any).anioFin;
+
+      if (typeof ai === 'number' && !out.fechaInicio) {
+        // por defecto, primer día del año
+        out.fechaInicio = `${ai}-01-01`;
+      }
+      if (typeof af === 'number' && !out.fechaFin) {
+        // por defecto, último día del año
+        out.fechaFin = `${af}-12-31`;
+      }
+
+      // ya no necesitamos los campos de año
+      delete out.anioInicio;
+      delete out.anioFin;
+    }
+
+    return out;
   }
 
-  obtenerActual(): Observable<AnioLectivo> {
-  return this.http.get<any>(`${this.base}/actual`).pipe(
-    map(r => r?.data ?? r)
-  );
-}
+  /** ================= Listado / Lectura ================= */
 
-  /** GET /api/anios-lectivos/:id */
-  obtenerUno(id: string): Observable<AnioLectivo> {
-    return this.http.get<any>(`${this.base}/${id}`).pipe(map(r => r?.data));
+  getAll(): Observable<AnioLectivo[]> {
+    return this.api.get<AnioLectivoResponse>(this.base).pipe(
+      map((r) => r.aniosLectivos ?? [])
+    );
   }
 
-  /** POST /api/anios-lectivos */
-  crear(payload: Partial<AnioLectivo>): Observable<AnioLectivo> {
-    // Validaciones mínimas de cliente (opcionales)
-    if (!payload?.nombre) return throwError(() => new Error('El nombre es obligatorio'));
-    if (!payload?.fechaInicio) return throwError(() => new Error('La fecha de inicio es obligatoria'));
-    if (!payload?.fechaFin) return throwError(() => new Error('La fecha de fin es obligatoria'));
-
-    return this.http.post<any>(this.base, payload).pipe(map(r => r?.data));
+  getById(id: string): Observable<AnioLectivo> {
+    return this.api.get<AnioLectivo>(`${this.base}/${id}`);
   }
 
-  /** PUT /api/anios-lectivos/:id */
-  actualizar(id: string, payload: Partial<AnioLectivo>): Observable<AnioLectivo> {
-    return this.http.put<any>(`${this.base}/${id}`, payload).pipe(map(r => r?.data));
+  obtenerActual(): Observable<AnioLectivo | null> {
+    return this.api.get<{ ok: boolean; actual?: AnioLectivo }>(`${this.base}/actual`).pipe(
+      map((res) => res.actual ?? null)
+    );
   }
 
-  /** DELETE /api/anios-lectivos/:id (soft/hard según tu backend) */
-  eliminar(id: string): Observable<AnioLectivo> {
-    return this.http.delete<any>(`${this.base}/${id}`).pipe(map(r => r?.data));
+  /** ================= Escritura ================= */
+
+  create(payload: CreatePayload): Observable<AnioLectivo> {
+    const body = this.normalizePayload(payload) as PayloadConFechas;
+    // Validación mínima por si alguien pasó algo raro
+    if (!body.fechaInicio || !body.fechaFin) {
+      throw new Error('fechaInicio y fechaFin son requeridas (puedes enviar anioInicio/ anioFin y se normalizan).');
+    }
+    return this.api.post<AnioLectivo>(this.base, body);
   }
 
-  
-  marcarActual(id: string): Observable<AnioLectivo> {
-    return this.http.put<any>(`${this.base}/${id}/actual`, {}).pipe(map(r => r?.data));
+  update(id: string, patch: UpdatePayload): Observable<AnioLectivo> {
+    const body = this.normalizePayload(patch) as Partial<PayloadConFechas>;
+    return this.api.put<AnioLectivo>(`${this.base}/${id}`, body);
+  }
+
+  delete(id: string): Observable<any> {
+    return this.api.delete<any>(`${this.base}/${id}`);
+  }
+
+  setActual(id: string): Observable<AnioLectivo> {
+    return this.api.put<AnioLectivo>(`${this.base}/${id}/set-actual`, {});
   }
 }

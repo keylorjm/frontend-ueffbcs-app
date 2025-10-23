@@ -1,5 +1,4 @@
 // src/app/services/estudiante.service.ts
-
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -7,40 +6,39 @@ import { ApiService } from './api.service';
 
 // Interface for the array item (CORREGIDA)
 export interface Estudiante {
-    uid?: string; 
-    nombre: string;
-    email: string;    
-    cedula: string; 
-    celular: string; 
-    estado?: boolean;
+  uid?: string;      // el backend expone uid (mapeo de _id)
+  nombre: string;
+  email: string;
+  cedula: string;
+  celular: string;
+  estado?: boolean;
 }
 
 // Interface for the full API response object
 interface EstudianteResponse {
-    ok: boolean;
-    total: number;
-    estudiantes: Estudiante[]; 
+  ok: boolean;
+  total: number;
+  estudiantes: Estudiante[];
 }
 
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable({ providedIn: 'root' })
 export class EstudianteService {
-  getById(id: Estudiante): any {
-      throw new Error('Method not implemented.');
-  }
   private api = inject(ApiService);
   private basePath = 'estudiantes';
 
-  // OBTENER TODOS LOS ESTUDIANTES (Mantiene el map para extraer el array)
+  // ✅ Corregido: firma correcta
+  getById(id: string): Observable<Estudiante> {
+    return this.api.get<Estudiante>(`${this.basePath}/${id}`);
+  }
+
+  // OBTENER TODOS LOS ESTUDIANTES (mantiene el map para extraer el array)
   getAll(): Observable<Estudiante[]> {
     return this.api.get<EstudianteResponse>(this.basePath).pipe(
-      map(response => response.estudiantes) 
+      map((response) => response.estudiantes)
     );
   }
-  
 
-  // MÉTODOS CRUD (sin cambios en la lógica)
+  // MÉTODOS CRUD
   create(estudiante: Estudiante): Observable<Estudiante> {
     return this.api.post<Estudiante>(this.basePath, estudiante);
   }
@@ -51,5 +49,20 @@ export class EstudianteService {
 
   delete(id: string): Observable<any> {
     return this.api.delete<any>(`${this.basePath}/${id}`);
+  }
+
+  // 🆕 Importar estudiantes desde Excel (.xlsx)
+importarExcel(
+    file: File,
+    options?: { dryRun?: boolean; allowUpdate?: boolean }
+  ): Observable<any> {
+    const fd = new FormData();
+    fd.append('file', file);
+
+    const params: Record<string, any> = {};
+    if (options?.dryRun !== undefined) params['dryRun'] = String(options.dryRun);
+    if (options?.allowUpdate !== undefined) params['allowUpdate'] = String(options.allowUpdate);
+
+    return this.api.postForm<any>(`${this.basePath}/import-excel`, fd, params);
   }
 }

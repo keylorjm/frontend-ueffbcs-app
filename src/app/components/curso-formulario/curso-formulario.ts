@@ -52,7 +52,7 @@ import { AnioLectivoService, AnioLectivo } from '../../services/anio-lectivo.ser
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Año Lectivo</mat-label>
           <mat-select formControlName="anioLectivo" required>
-            <mat-option *ngFor="let a of aniosLectivos" [value]="a.uid ?? a._id">
+            <mat-option *ngFor="let a of aniosLectivos" [value]="a._id">
               {{ a.nombre }} ({{ a.fechaInicio }} - {{ a.fechaFin }})
             </mat-option>
           </mat-select>

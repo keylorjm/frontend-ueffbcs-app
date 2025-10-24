@@ -4,118 +4,93 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 
-/** Interfaz del Año Lectivo */
 export interface AnioLectivo {
-  _id?: string;
-  uid?: string;
-  nombre: string;      // p.ej. "2025 - 2026" o "2025"
-  fechaInicio: string; // ISO "YYYY-MM-DD"
-  fechaFin: string;    // ISO "YYYY-MM-DD"
-  estado: boolean;
-  actual?: boolean;
+  _id: string;
+  nombre: string;
+  fechaInicio: string; // ISO
+  fechaFin: string;    // ISO
+  actual: boolean;
+  activo?: boolean;    // si tu schema lo tiene, vendrá aquí
 }
 
-/** Respuesta backend */
-interface AnioLectivoResponse {
-  ok: boolean;
-  total?: number;
-  aniosLectivos: AnioLectivo[];
-}
-
-/** Tipos de payload aceptados (flexibles) */
-type PayloadConFechas = {
+type CreatePayload = {
   nombre: string;
-  fechaInicio: string;  // ISO
-  fechaFin: string;     // ISO
-  estado: boolean;
+  anioInicio?: number;
+  anioFin?: number;
+  fechaInicio?: string;
+  fechaFin?: string;
   actual?: boolean;
+  activo?: boolean;
 };
 
-type PayloadConAnios = {
-  nombre: string;
-  anioInicio: number;   // 2025
-  anioFin: number;      // 2026
-  estado: boolean;
-  actual?: boolean;
-};
-
-type CreatePayload = PayloadConFechas | PayloadConAnios;
-type UpdatePayload = Partial<PayloadConFechas & PayloadConAnios>;
+type UpdatePayload = Partial<CreatePayload>;
 
 @Injectable({ providedIn: 'root' })
 export class AnioLectivoService {
   private api = inject(ApiService);
-  private base = 'aniolectivo';
+  private base = 'aniolectivo'; // http://localhost:5000/api/aniolectivo
 
-  /** ================= Helpers ================= */
-
-  /** Normaliza datos de entrada a formato con fechaInicio/fechaFin ISO */
-  private normalizePayload(input: CreatePayload | UpdatePayload): PayloadConFechas | Partial<PayloadConFechas> {
+  /** 🔹 Normaliza años numéricos a fechas ISO */
+  private normalizePayload(input: CreatePayload | UpdatePayload): any {
     const out: any = { ...input };
 
-    const hasFechas = typeof (input as any).fechaInicio === 'string' || typeof (input as any).fechaFin === 'string';
-    const hasAnios  = typeof (input as any).anioInicio === 'number' || typeof (input as any).anioFin === 'number';
-
-    if (hasAnios && !hasFechas) {
-      const ai = (input as any).anioInicio;
-      const af = (input as any).anioFin;
-
-      if (typeof ai === 'number' && !out.fechaInicio) {
-        // por defecto, primer día del año
-        out.fechaInicio = `${ai}-01-01`;
-      }
-      if (typeof af === 'number' && !out.fechaFin) {
-        // por defecto, último día del año
-        out.fechaFin = `${af}-12-31`;
-      }
-
-      // ya no necesitamos los campos de año
-      delete out.anioInicio;
-      delete out.anioFin;
+    if (input.anioInicio && !input.fechaInicio) {
+      out.fechaInicio = `${input.anioInicio}-01-01`;
+    }
+    if (input.anioFin && !input.fechaFin) {
+      out.fechaFin = `${input.anioFin}-12-31`;
     }
 
+    delete out.anioInicio;
+    delete out.anioFin;
     return out;
   }
 
-  /** ================= Listado / Lectura ================= */
+  /** =================== Lectura =================== */
 
   getAll(): Observable<AnioLectivo[]> {
-    return this.api.get<AnioLectivoResponse>(this.base).pipe(
-      map((r) => r.aniosLectivos ?? [])
+    return this.api.get<{ ok: boolean; data: AnioLectivo[] }>(this.base).pipe(
+      map(res => res.data ?? [])
     );
   }
 
   getById(id: string): Observable<AnioLectivo> {
-    return this.api.get<AnioLectivo>(`${this.base}/${id}`);
-  }
-
-  obtenerActual(): Observable<AnioLectivo | null> {
-    return this.api.get<{ ok: boolean; actual?: AnioLectivo }>(`${this.base}/actual`).pipe(
-      map((res) => res.actual ?? null)
+    return this.api.get<{ ok: boolean; data: AnioLectivo }>(`${this.base}/${id}`).pipe(
+      map(res => res.data)
     );
   }
 
-  /** ================= Escritura ================= */
+  obtenerActual(): Observable<AnioLectivo | null> {
+    return this.api.get<{ ok: boolean; data: AnioLectivo | null }>(`${this.base}/actual`)
+      .pipe(map(res => res.data ?? null));
+  }
+
+  /** =================== Escritura =================== */
 
   create(payload: CreatePayload): Observable<AnioLectivo> {
-    const body = this.normalizePayload(payload) as PayloadConFechas;
-    // Validación mínima por si alguien pasó algo raro
-    if (!body.fechaInicio || !body.fechaFin) {
-      throw new Error('fechaInicio y fechaFin son requeridas (puedes enviar anioInicio/ anioFin y se normalizan).');
-    }
-    return this.api.post<AnioLectivo>(this.base, body);
+    const body = this.normalizePayload(payload);
+    return this.api.post<{ ok: boolean; data: AnioLectivo }>(this.base, body).pipe(
+      map(res => res.data)
+    );
   }
 
   update(id: string, patch: UpdatePayload): Observable<AnioLectivo> {
-    const body = this.normalizePayload(patch) as Partial<PayloadConFechas>;
-    return this.api.put<AnioLectivo>(`${this.base}/${id}`, body);
+    const body = this.normalizePayload(patch);
+    return this.api.put<{ ok: boolean; data: AnioLectivo }>(`${this.base}/${id}`, body).pipe(
+      map(res => res.data)
+    );
   }
 
-  delete(id: string): Observable<any> {
-    return this.api.delete<any>(`${this.base}/${id}`);
+  delete(id: string): Observable<{ _id?: string } | AnioLectivo> {
+    return this.api.delete<{ ok: boolean; data: any }>(`${this.base}/${id}`).pipe(
+      map(res => res.data)
+    );
   }
 
-  setActual(id: string): Observable<AnioLectivo> {
-    return this.api.put<AnioLectivo>(`${this.base}/${id}/set-actual`, {});
-  }
+  setActual(id: string) {
+  // Usa PUT porque ya tienes ese alias en tu router
+  return this.api
+    .put<{ ok: boolean; data: AnioLectivo }>(`${this.base}/${id}/actual`, {})
+    .pipe(map(res => res.data));
+}
 }

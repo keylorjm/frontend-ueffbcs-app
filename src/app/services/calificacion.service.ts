@@ -1,89 +1,68 @@
+// src/app/services/calificacion.service.ts
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
-import { ApiService } from './api.service';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { environment } from '../environments/environment';
 
 export type Trimestre = 'T1' | 'T2' | 'T3';
 
-/** Tipo base devuelto por backend */
-export interface Calificacion {
-  _id?: string;
-  estudiante?: { _id?: string; uid?: string; nombre?: string };
-  curso?: string | { _id?: string; nombre?: string };
-  materia?: string | { _id?: string; nombre?: string };
-  anioLectivo?: string | { _id?: string; nombre?: string };
-  T1?: any;
-  T2?: any;
-  T3?: any;
-  promedioTrimestralAnual?: number;
+export interface NotaTrimestre {
+  promedioTrimestral: number | null;
+  faltasJustificadas?: number;
+  faltasInjustificadas?: number;
+  asistenciaTotal?: number;
 }
 
-/** Tipo enriquecido para frontend */
-export interface CalificacionRow extends Calificacion {
+export interface NotaTrimestreInputRow {
   estudianteId: string;
+  promedioTrimestral: number | null;
+  faltasJustificadas?: number;
+  faltasInjustificadas?: number;
+  asistenciaTotal?: number;
 }
 
-/** Payload para cargar notas */
-export interface NotaTrimestreInput {
-  estudianteId: string;
-  promedioTrimestral: number;
-  faltasJustificadas: number;
-  faltasInjustificadas: number;
-}
-
-/** Payload de bulk save */
-export interface CargarTrimestreBulkInput {
+export interface BulkTrimestrePayload {
   cursoId: string;
   anioLectivoId: string;
   materiaId: string;
   trimestre: Trimestre;
-  notas: NotaTrimestreInput[];
+  rows: NotaTrimestreInputRow[];
+}
+
+export interface EvaluacionFinalPayload {
+  cursoId: string;
+  anioLectivoId: string;
+  estudianteId: string;
+  // Si tu backend requiere por materia para final, habilítalo:
+  // materiaId?: string;
+  evaluacionFinal?: number | null;
+  cualitativaFinal?: string | null;
+  observacionFinal?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
 export class CalificacionService {
-  private api = inject(ApiService);
-  private base = 'calificaciones';
+  private http = inject(HttpClient);
+  private baseUrl = `${environment.apiUrl}/calificaciones`;
 
-  /** ✅ Obtiene notas del backend y mapea al tipo CalificacionRow */
   obtenerNotas(params: {
     cursoId: string;
     anioLectivoId: string;
     materiaId: string;
-    trimestre: Trimestre;
-  }): Observable<CalificacionRow[]> {
-    return this.api
-      .get<Calificacion[]>(`${this.base}`, params)
-      .pipe(
-        map((rows) =>
-          (rows ?? []).map((r) => {
-            const estudianteId =
-              (r.estudiante as any)?.uid ??
-              (r.estudiante as any)?._id ??
-              '';
-            return { ...r, estudianteId };
-          })
-        )
-      );
+    trimestre?: Trimestre;
+  }) {
+    let p = new HttpParams()
+      .set('cursoId', params.cursoId)
+      .set('anioLectivoId', params.anioLectivoId)
+      .set('materiaId', params.materiaId);
+    if (params.trimestre) p = p.set('trimestre', params.trimestre);
+    return this.http.get<any>(`${this.baseUrl}`, { params: p });
   }
 
-  /** ✅ Carga masiva de notas */
-  cargarTrimestreBulk(input: CargarTrimestreBulkInput): Observable<any> {
-    return this.api.post(`${this.base}/bulk`, input);
+  cargarTrimestreBulk(payload: BulkTrimestrePayload) {
+    return this.http.post<any>(`${this.baseUrl}/bulk-trimestre`, payload);
   }
 
-  /** Opcional: obtiene todas las calificaciones del curso */
-  listarPorCurso(cursoId: string): Observable<CalificacionRow[]> {
-    return this.api.get<Calificacion[]>(`${this.base}/curso/${cursoId}`).pipe(
-      map((rows) =>
-        (rows ?? []).map((r) => ({
-          ...r,
-          estudianteId:
-            (r.estudiante as any)?.uid ??
-            (r.estudiante as any)?._id ??
-            '',
-        }))
-      )
-    );
+  cargarFinal(payload: EvaluacionFinalPayload) {
+    return this.http.post<any>(`${this.baseUrl}/final`, payload);
   }
 }

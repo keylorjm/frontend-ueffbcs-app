@@ -47,7 +47,7 @@ export const routes: Routes = [
         canActivate: [ProfesorGuard],
         loadComponent: () =>
           import('./components/profesor-mis-cursos/profesor-mis-cursos').then(
-            (m) => m.ProfesorMisCursos
+            (m) => m.ProfesorMisCursosComponent
           ),
         title: 'Mis Cursos',
       },
@@ -104,14 +104,7 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./components/materias/materias').then((m) => m.MateriasComponent),
         title: 'Gestión de Materias',
-      },
-
-      {
-        path: 'boletin',
-        canActivate: [AdminGuard],
-        loadComponent: () =>
-          import('./components/admin-boletin/admin-boletin').then((m) => m.AdminBoletinComponent),
-      },
+      },    
 
       {
         path: 'profesor-notas',
@@ -120,16 +113,7 @@ export const routes: Routes = [
             (m) => m.ProfesorNotasCursoComponent
           ),
         title: 'Detalle del Curso',
-      },
-
-      {
-        path: 'curso-detalle/:id',
-        loadComponent: () =>
-          import('./components/curso-detalle-component/curso-detalle-component').then(
-            (m) => m.CursoDetalleComponent
-          ),
-        title: 'Detalle del Curso',
-      },
+      },     
 
       { path: '**', redirectTo: 'mis-cursos' },
     ],

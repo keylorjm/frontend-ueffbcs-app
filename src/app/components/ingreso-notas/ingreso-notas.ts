@@ -1,46 +1,27 @@
-import { Component, ChangeDetectionStrategy, inject, signal, computed } from '@angular/core';
+// src/app/pages/profesor/ingreso-notas.component.ts
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router } from '@angular/router';
-import {
-  FormArray,
-  FormBuilder,
-  FormControl,
-  FormGroup,
-  ReactiveFormsModule,
-  Validators,
-} from '@angular/forms';
-import { MatTableModule } from '@angular/material/table';
+import { FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { MatCardModule } from '@angular/material/card';
+import { MatSelectModule } from '@angular/material/select';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatButtonModule } from '@angular/material/button';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { ActivatedRoute, Router } from '@angular/router';
+import { CalificacionService, BulkTrimestrePayload, Trimestre } from '../../services/calificacion.service';
+import { ProfesorService } from '../../services/profesor.service';
+import { HttpClientModule } from '@angular/common/http';
 
-import { CursoService, Curso } from '../../services/curso.service';
-import { Estudiante } from '../../services/estudiante.service';
-import {
-  CalificacionService,
-  Trimestre,
-  NotaTrimestreInput,
-} from '../../services/calificacion.service';
-
-/** Conversión nota → cualitativa (solo visual) */
-function cualiFromPromedio(prom: number | null | undefined): string {
-  if (prom == null || Number.isNaN(Number(prom))) return '';
-  const p = Number(prom);
-  if (p >= 9) return 'A (Excelente)';
-  if (p >= 8) return 'B (Muy bueno)';
-  if (p >= 7) return 'C (Bueno)';
-  if (p >= 6) return 'D (Suficiente)';
-  return 'E (Insuficiente)';
+interface EstudianteRow {
+  _id: string;
+  nombre: string;
+  promedioTrimestral: number | null;
+  faltasJustificadas: number;
+  faltasInjustificadas: number;
+  asistenciaTotal: number;
 }
-
-/** Formulario por estudiante (según backend actual) */
-type NotaForm = FormGroup<{
-  estudianteId: FormControl<string>;
-  promedioTrimestral: FormControl<number | null>;
-  faltasJustificadas: FormControl<number | null>;
-  faltasInjustificadas: FormControl<number | null>;
-}>;
 
 @Component({
   standalone: true,
@@ -48,340 +29,237 @@ type NotaForm = FormGroup<{
   imports: [
     CommonModule,
     ReactiveFormsModule,
-    MatTableModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatButtonModule,
-    MatSnackBarModule,
+    HttpClientModule,
+    // Material
+    MatCardModule, MatSelectModule, MatButtonModule, MatIconModule,
+    MatSnackBarModule, MatFormFieldModule, MatInputModule
   ],
   template: `
-    <section class="panel" *ngIf="form">
-      <h2>Ingreso de Notas · {{ cursoNombre() }}</h2>
-
-      <select [value]="trimestre()" (change)="onTrimestre($event)">
-  <option value="T1">T1</option>
-  <option value="T2">T2</option>
-  <option value="T3">T3</option>
-</select>
-
-
-      <div class="actions-top">
-        <button mat-stroked-button type="button" (click)="precargar()">Precargar</button>
+  <div class="wrap p-4">
+    <mat-card class="card">
+      <div class="header flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-xl font-semibold">Ingreso de Notas</h2>
+          <p class="text-sm opacity-70">Seleccione Materia y Trimestre</p>
+        </div>
+        <div class="actions flex gap-2">
+          <button mat-stroked-button (click)="precargar()">
+            <mat-icon>download</mat-icon> Precargar
+          </button>
+          <button mat-flat-button color="primary" (click)="guardar()">
+            <mat-icon>save</mat-icon> Guardar
+          </button>
+        </div>
       </div>
 
-      <form [formGroup]="form" (ngSubmit)="guardar()">
-        <div formArrayName="notas">
-          <table mat-table [dataSource]="estudiantes()" class="mat-elevation-z2">
-            <!-- Estudiante -->
-            <ng-container matColumnDef="estudiante">
-              <th mat-header-cell *matHeaderCellDef>Estudiante</th>
-              <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
-                {{ e?.nombre }}
-                <input type="hidden" formControlName="estudianteId" />
-              </td>
-            </ng-container>
+      <form [formGroup]="form" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <mat-form-field appearance="outline">
+          <mat-label>Materia</mat-label>
+          <mat-select formControlName="materiaId" (selectionChange)="onParamsChange()">
+            <mat-option *ngFor="let m of materias()" [value]="m.materiaId">
+              {{ m.materiaNombre }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
 
-            <!-- PromedioTrimestral -->
-            <ng-container matColumnDef="prom">
-              <th mat-header-cell *matHeaderCellDef>Nota (0–10)</th>
-              <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
-                <mat-form-field appearance="outline">
-                  <input
-                    matInput
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="10"
-                    formControlName="promedioTrimestral"
-                    placeholder="0 - 10"
-                  />
-                </mat-form-field>
-              </td>
-            </ng-container>
+        <mat-form-field appearance="outline">
+          <mat-label>Trimestre</mat-label>
+          <mat-select formControlName="trimestre" (selectionChange)="onParamsChange()">
+            <mat-option value="T1">Primer Trimestre</mat-option>
+            <mat-option value="T2">Segundo Trimestre</mat-option>
+            <mat-option value="T3">Tercer Trimestre</mat-option>
+          </mat-select>
+        </mat-form-field>
 
-            <!-- Cualitativa (visual) -->
-            <ng-container matColumnDef="cualit">
-              <th mat-header-cell *matHeaderCellDef>Cualitativa</th>
-              <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
-                <span
-                  class="badge"
-                  [ngClass]="
-                    badgeClass(cualiFromPromedio(notasArr.at(i).get('promedioTrimestral')?.value))
-                  "
-                >
-                  {{ cualiFromPromedio(notasArr.at(i).get('promedioTrimestral')?.value) || '—' }}
-                </span>
-              </td>
-            </ng-container>
-
-            <!-- Faltas J -->
-            <ng-container matColumnDef="fj">
-              <th mat-header-cell *matHeaderCellDef>FJ</th>
-              <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
-                <mat-form-field appearance="outline">
-                  <input matInput type="number" min="0" formControlName="faltasJustificadas" />
-                </mat-form-field>
-              </td>
-            </ng-container>
-
-            <!-- Faltas I -->
-            <ng-container matColumnDef="fi">
-              <th mat-header-cell *matHeaderCellDef>FI</th>
-              <td mat-cell *matCellDef="let e; let i = index" [formGroupName]="i">
-                <mat-form-field appearance="outline">
-                  <input matInput type="number" min="0" formControlName="faltasInjustificadas" />
-                </mat-form-field>
-              </td>
-            </ng-container>
-
-            <tr mat-header-row *matHeaderRowDef="displayed"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayed"></tr>
-          </table>
-        </div>
-
-        <div class="actions">
-          <button mat-raised-button color="primary" type="submit">Guardar</button>
-          <button
-            mat-button
-            type="button"
-            (click)="router.navigate(['/profesor/curso', cursoId, 'notas'])"
-          >
-            Cancelar
+        <div class="flex items-center">
+          <button mat-stroked-button color="primary" (click)="cargarEvaluacionFinal()" type="button">
+            <mat-icon>workspace_premium</mat-icon>
+            Evaluación Final
           </button>
         </div>
       </form>
-    </section>
+
+      <div class="modern-table overflow-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b">
+              <th class="text-left p-2 w-1/3">Estudiante</th>
+              <th class="text-left p-2">Prom.</th>
+              <th class="text-left p-2">F. Just</th>
+              <th class="text-left p-2">F. Injust</th>
+              <th class="text-left p-2">Asist.</th>
+            </tr>
+          </thead>
+          <tbody formArrayName="rows">
+            <tr *ngFor="let row of rows().controls; let i = index" [formGroupName]="i" class="border-b">
+              <td class="p-2">{{ row.value.nombre }}</td>
+              <td class="p-2">
+                <input matInput type="number" formControlName="promedioTrimestral" placeholder="0 - 10" min="0" max="10">
+              </td>
+              <td class="p-2">
+                <input matInput type="number" formControlName="faltasJustificadas" min="0">
+              </td>
+              <td class="p-2">
+                <input matInput type="number" formControlName="faltasInjustificadas" min="0">
+              </td>
+              <td class="p-2">
+                <input matInput type="number" formControlName="asistenciaTotal" min="0">
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </mat-card>
+  </div>
   `,
-  styles: [
-    `
-      .panel {
-        display: grid;
-        gap: 16px;
-      }
-      .context {
-        display: flex;
-        gap: 16px;
-        align-items: center;
-      }
-      .actions-top {
-        margin-top: -8px;
-      }
-      table {
-        width: 100%;
-      }
-      mat-form-field {
-        width: 130px;
-      }
-      .actions {
-        display: flex;
-        gap: 12px;
-        margin-top: 12px;
-      }
-      .badge {
-        display: inline-block;
-        padding: 2px 10px;
-        border-radius: 999px;
-        background: #f3f4f6;
-        font-size: 12px;
-      }
-      .badge-a {
-        background: #dcfce7;
-        color: #166534;
-      }
-      .badge-b {
-        background: #e0f2fe;
-        color: #075985;
-      }
-      .badge-c {
-        background: #fef9c3;
-        color: #854d0e;
-      }
-      .badge-d {
-        background: #fee2e2;
-        color: #991b1b;
-      }
-    `,
-  ],
-  changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`
+    .card { border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,.06); }
+    .modern-table table { border-collapse: collapse; }
+    th, td { vertical-align: middle; }
+  `]
 })
 export class IngresoNotasComponent {
   private route = inject(ActivatedRoute);
-  protected router = inject(Router);
+  private router = inject(Router);
+  private califSvc = inject(CalificacionService);
+  private profSvc = inject(ProfesorService);
   private fb = inject(FormBuilder);
-  private snack = inject(MatSnackBar);
+  private sb = inject(MatSnackBar);
 
-  private cursoService = inject(CursoService);
-  private califService = inject(CalificacionService);
+  // parámetros clave
+  cursoId = signal<string>('');
+  anioLectivoId = signal<string>(''); // asume que ya tienes "actual" resuelto en tu shell
+  materiaId = signal<string>('');
+  trimestre = signal<Trimestre>('T1');
 
-  // -------- Contexto desde la URL (backend espera: cursoId, anioLectivoId, materiaId, trimestre)
-  cursoId = this.route.snapshot.paramMap.get('id')!;
-  materiaId = this.route.snapshot.queryParamMap.get('materiaId') || '';
-  anioLectivoId = this.route.snapshot.queryParamMap.get('anioLectivoId') || '';
-  trimestre = signal<Trimestre>(
-    (this.route.snapshot.queryParamMap.get('trimestre') as Trimestre) || 'T1'
-  );
+  // materias asignadas al profe (del curso actual)
+  materias = signal<{ materiaId: string; materiaNombre: string }[]>([]);
 
-  // -------- Estado UI
-  curso = signal<Curso | null>(null);
-  estudiantes = signal<Estudiante[]>([]);
-  cursoNombre = computed(() => this.curso()?.nombre ?? '—');
-
-  displayed = ['estudiante', 'prom', 'cualit', 'fj', 'fi'] as const;
-
-  // -------- Formulario (una fila por estudiante)
   form = this.fb.group({
-    notas: this.fb.array<NotaForm>([]),
+    materiaId: ['', Validators.required],
+    trimestre: ['T1' as Trimestre, Validators.required],
+    rows: this.fb.array<FormGroup<{
+      estudianteId: FormControl<string>;
+      nombre: FormControl<string>;
+      promedioTrimestral: FormControl<number | null>;
+      faltasJustificadas: FormControl<number>;
+      faltasInjustificadas: FormControl<number>;
+      asistenciaTotal: FormControl<number>;
+    }>>([])
   });
 
-  get notasArr(): FormArray<NotaForm> {
-    return this.form.get('notas') as FormArray<NotaForm>;
-  }
-
-  // -------- Helpers UI
-  cualiFromPromedio = cualiFromPromedio;
-  badgeClass(q: string): string {
-    if (!q) return '';
-    if (q.startsWith('A')) return 'badge-a';
-    if (q.startsWith('B')) return 'badge-b';
-    if (q.startsWith('C')) return 'badge-c';
-    return 'badge-d';
-  }
+  rows = computed(() => this.form.get('rows') as FormArray);
 
   constructor() {
-    // Cargar curso + estudiantes
-    this.cursoService.getById(this.cursoId).subscribe({
-      next: (c) => {
-        this.curso.set(c);
-        const ests = (c.estudiantes ?? []) as any[];
-        this.estudiantes.set(ests);
-        // si no viene anioLectivoId en la URL, intenta tomarlo del curso (populate)
-        if (!this.anioLectivoId) {
-          const al = (c as any)?.anioLectivo;
-          this.anioLectivoId = (al?.uid ?? al?._id) || '';
-        }
-        this.armarFormulario();
-        this.precargar(); // intentamos precargar al abrir
-      },
-      error: () => this.snack.open('No se pudo cargar el curso', 'Cerrar', { duration: 3000 }),
+    // lee params (?materiaId=)
+    this.route.queryParamMap.subscribe(qp => {
+      const mid = qp.get('materiaId');
+      if (mid) {
+        this.form.patchValue({ materiaId: mid });
+        this.materiaId.set(mid);
+      }
+    });
+    // lee path /:cursoId
+    this.route.paramMap.subscribe(pm => {
+      const cid = pm.get('id');
+      if (cid) this.cursoId.set(cid);
+      this.cargarMateriasAsignadas();
     });
   }
 
-  // construir form array
-  private armarFormulario(): void {
-    this.notasArr.clear();
-    for (const e of this.estudiantes()) {
-      const estId = (e as any).uid ?? (e as any)._id;
-      this.notasArr.push(this.newNotaForm(estId));
-    }
-  }
-
-  private newNotaForm(estudianteId: string): NotaForm {
-    return this.fb.group({
-      estudianteId: this.fb.control<string>(estudianteId, {
-        nonNullable: true,
-        validators: [Validators.required],
-      }),
-      promedioTrimestral: this.fb.control<number | null>(null, [
-        Validators.min(0),
-        Validators.max(10),
-      ]),
-      faltasJustificadas: this.fb.control<number | null>(0, [Validators.min(0)]),
-      faltasInjustificadas: this.fb.control<number | null>(0, [Validators.min(0)]),
-    });
-  }
-
-  onTrimestre(value: any) {
-    const t = String(value || 'T1') as Trimestre;
-    this.trimestre.set(t);
-    // no reseteamos estructura, sólo valores visibles
-    for (const g of this.notasArr.controls) {
-      g.patchValue(
-        { promedioTrimestral: null, faltasJustificadas: 0, faltasInjustificadas: 0 },
-        { emitEvent: false }
-      );
-    }
-  }
-
-  /** Precarga desde GET /api/calificaciones con {cursoId, anioLectivoId, materiaId, trimestre} */
-  precargar() {
-    if (!this.anioLectivoId || !this.materiaId) {
-      this.snack.open('Falta Año Lectivo o Materia en la URL.', 'Cerrar', { duration: 3000 });
-      return;
-    }
-    this.califService
-      .obtenerNotas({
-        cursoId: this.cursoId,
-        anioLectivoId: this.anioLectivoId,
-        materiaId: this.materiaId,
-        trimestre: this.trimestre(),
-      })
-      .subscribe({
-        next: (rows) => {
-          // rows = Calificacion[] con campos T1/T2/T3
-          const byEst: Record<string, any> = {};
-          for (const r of rows) {
-            const id = r?.estudiante?.uid ?? r?.estudiante?._id;
-            if (id) byEst[id] = r;
+  private cargarMateriasAsignadas() {
+    // trae cursos y materias del profesor y setea materias del curso seleccionado
+    this.profSvc.misCursosMaterias().subscribe({
+      next: (resp) => {
+        const curso = resp.cursos.find(c => c.cursoId === this.cursoId());
+        if (curso) {
+          this.anioLectivoId.set(curso.anioLectivoId);
+          this.materias.set(curso.materias.map(m => ({ materiaId: m.materiaId, materiaNombre: m.materiaNombre })));
+          // si no hay materia seleccionada aún, setear la primera
+          if (!this.form.value.materiaId && curso.materias.length) {
+            const first = curso.materias[0].materiaId;
+            this.form.patchValue({ materiaId: first });
           }
-          const tri = this.trimestre();
-          this.estudiantes().forEach((e, idx) => {
-            const k = (e as any).uid ?? (e as any)._id;
-            const row = byEst[k];
-            if (!row) return;
-            const t = (row as any)[tri] || {};
-            this.notasArr.at(idx).patchValue(
-              {
-                promedioTrimestral: t.promedioTrimestral ?? null,
-                faltasJustificadas: t.faltasJustificadas ?? 0,
-                faltasInjustificadas: t.faltasInjustificadas ?? 0,
-              },
-              { emitEvent: false }
-            );
-          });
-          this.snack.open('Notas precargadas', 'OK', { duration: 1800 });
-        },
-        error: (e) => {
-          const msg = e?.error?.message || 'No se pudieron precargar las notas';
-          this.snack.open(`❌ ${msg}`, 'Cerrar', { duration: 3500 });
-        },
-      });
+        }
+      },
+      error: () => this.sb.open('No se pudieron cargar las materias asignadas', 'Cerrar', { duration: 3000 })
+    });
   }
 
-  /** Guarda con POST /api/calificaciones/bulk-trimestre */
-  guardar() {
-    if (this.form.invalid) {
-      this.snack.open('Revisa los campos (0–10).', 'Cerrar', { duration: 3000 });
-      return;
-    }
-    if (!this.anioLectivoId || !this.materiaId) {
-      this.snack.open('Falta Año Lectivo o Materia en la URL.', 'Cerrar', { duration: 3000 });
-      return;
-    }
+  onParamsChange() {
+    const mid = this.form.value.materiaId as string;
+    const tri = this.form.value.trimestre as Trimestre;
+    if (!mid || !tri) return;
+    this.materiaId.set(mid);
+    this.trimestre.set(tri);
+    this.precargar();
+  }
 
-    const notas: NotaTrimestreInput[] = this.notasArr.value.map((v: any) => ({
-      estudianteId: v.estudianteId,
-      promedioTrimestral: v.promedioTrimestral ?? 0,
-      faltasJustificadas: v.faltasJustificadas ?? 0,
-      faltasInjustificadas: v.faltasInjustificadas ?? 0,
+  precargar() {
+    const payload = {
+      cursoId: this.cursoId(),
+      anioLectivoId: this.anioLectivoId(),
+      materiaId: this.materiaId(),
+      trimestre: this.trimestre()
+    };
+    if (!payload.cursoId || !payload.anioLectivoId || !payload.materiaId) {
+      this.sb.open('Seleccione materia y verifique curso/año lectivo', 'Cerrar', { duration: 3000 });
+      return;
+    }
+    this.califSvc.obtenerNotas(payload).subscribe({
+      next: (res) => {
+        const estudiantes: EstudianteRow[] = (res?.data ?? []).map((r: any) => ({
+          _id: r.estudiante?._id ?? r.estudianteId,
+          nombre: r.estudiante?.nombre ?? r.nombre ?? '—',
+          promedioTrimestral: r.promedioTrimestral ?? null,
+          faltasJustificadas: r.faltasJustificadas ?? 0,
+          faltasInjustificadas: r.faltasInjustificadas ?? 0,
+          asistenciaTotal: r.asistenciaTotal ?? 0,
+        }));
+        const arr = this.fb.array(estudiantes.map(e => this.fb.group({
+          estudianteId: this.fb.control<string>(e._id, { nonNullable: true }),
+          nombre: this.fb.control<string>(e.nombre, { nonNullable: true }),
+          promedioTrimestral: this.fb.control<number | null>(e.promedioTrimestral),
+          faltasJustificadas: this.fb.control<number>(e.faltasJustificadas, { nonNullable: true }),
+          faltasInjustificadas: this.fb.control<number>(e.faltasInjustificadas, { nonNullable: true }),
+          asistenciaTotal: this.fb.control<number>(e.asistenciaTotal, { nonNullable: true }),
+        })));
+        this.form.setControl('rows', arr);
+      },
+      error: () => this.sb.open('No se pudieron obtener notas', 'Cerrar', { duration: 3000 })
+    });
+  }
+
+  guardar() {
+    const rows = (this.form.value.rows ?? []).map(r => ({
+      estudianteId: r!.estudianteId!,
+      promedioTrimestral: r!.promedioTrimestral ?? null,
+      faltasJustificadas: Number(r!.faltasJustificadas ?? 0),
+      faltasInjustificadas: Number(r!.faltasInjustificadas ?? 0),
+      asistenciaTotal: Number(r!.asistenciaTotal ?? 0),
     }));
 
-    this.califService
-      .cargarTrimestreBulk({
-        cursoId: this.cursoId,
-        anioLectivoId: this.anioLectivoId,
-        materiaId: this.materiaId,
-        trimestre: this.trimestre(),
-        notas,
-      })
-      .subscribe({
-        next: () => {
-          this.snack.open('✅ Notas guardadas', 'OK', { duration: 2200 });
-          this.router.navigate(['/profesor/curso', this.cursoId, 'notas']);
-        },
-        error: (e) => {
-          const msg = e?.error?.message || 'Error guardando notas';
-          this.snack.open(`❌ ${msg}`, 'Cerrar', { duration: 3500 });
-        },
-      });
+    const payload: BulkTrimestrePayload = {
+      cursoId: this.cursoId(),
+      anioLectivoId: this.anioLectivoId(),
+      materiaId: this.materiaId(),
+      trimestre: this.trimestre(),
+      rows
+    };
+
+    this.califSvc.cargarTrimestreBulk(payload).subscribe({
+      next: () => this.sb.open('Notas guardadas', 'Cerrar', { duration: 2500 }),
+      error: () => this.sb.open('Error guardando notas', 'Cerrar', { duration: 3000 })
+    });
+  }
+
+  cargarEvaluacionFinal() {
+    // Navega a reporte final por estudiante o abre un diálogo propio
+    this.router.navigate(['/app/reporte-final'], {
+      queryParams: {
+        cursoId: this.cursoId(),
+        anioLectivoId: this.anioLectivoId()
+      }
+    });
   }
 }

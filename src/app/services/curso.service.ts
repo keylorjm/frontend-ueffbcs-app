@@ -1,46 +1,36 @@
+// src/app/services/curso.service.ts
 import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
-import { ApiService } from './api.service';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../environments/environment';
+
+export interface MateriaAsignada {
+  materia: string;   // id de materia
+  profesor: string;  // id de profesor responsable PARA esa materia en el curso
+}
 
 export interface Curso {
   _id?: string;
   nombre: string;
-  anioLectivo: string;          // ObjectId
-  profesorTutor: string;        // ObjectId de Usuario
-  materias: string[];           // Array de ObjectId (Materia)
-  estudiantes: string[];        // Array de ObjectId (Estudiante)
+  anioLectivo: string;
+  profesorTutor: string;
+  estudiantes: string[];
+  materias: MateriaAsignada[]; // <— clave
 }
 
 @Injectable({ providedIn: 'root' })
 export class CursoService {
-  private api = inject(ApiService);
-  private base = 'cursos';
+  private http = inject(HttpClient);
+  private baseUrl = `${environment.apiUrl}/cursos`;
 
-  getAll(params?: { profesorId?: string }): Observable<any[]> {
-    return this.api.get<any>(this.base, params as any).pipe(
-      map((res: any) => res?.cursos ?? [])
-    );
-  }
-
-  getById(id: string): Observable<any> {
-    return this.api.get<any>(`${this.base}/${id}`);
-  }
-
-  create(curso: {
-    nombre: string;
-    anioLectivo: string;
-    profesorTutor: string;
-    materias: string[];
-    estudiantes: string[];
-  }): Observable<any> {
-    return this.api.post<any>(this.base, curso);
-  }
-
-  update(id: string, patch: Partial<Curso>): Observable<any> {
-    return this.api.put<any>(`${this.base}/${id}`, patch);
-  }
-
-  delete(id: string): Observable<any> {
-    return this.api.delete<any>(`${this.base}/${id}`);
-  }
+  listar() { return this.http.get<any>(`${this.baseUrl}`); }
+  obtener(id: string) { return this.http.get<any>(`${this.baseUrl}/${id}`); }
+  crear(data: Curso) {
+  console.log('[CursoService] POST /api/cursos', data);
+  return this.http.post<any>(`${this.baseUrl}`, data);
+}
+actualizar(id: string, data: Curso) {
+  console.log('[CursoService] PUT /api/cursos/' + id, data);
+  return this.http.put<any>(`${this.baseUrl}/${id}`, data);
+}
+  eliminar(id: string) { return this.http.delete<any>(`${this.baseUrl}/${id}`); }
 }

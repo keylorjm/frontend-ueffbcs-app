@@ -1,25 +1,27 @@
+// src/app/services/reporte.service.ts
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
-import { ApiService } from './api.service';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { environment } from '../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class ReporteService {
-  private api = inject(ApiService);
-  private base = 'reportes';
+  private http = inject(HttpClient);
+  private baseUrl = `${environment.apiUrl}/reportes`;
 
-  trimestreJSON(params: { cursoId: string; anioLectivoId: string; materiaId: string; trimestre: 'T1'|'T2'|'T3' }): Observable<any> {
-    return this.api.get<any>(`${this.base}/trimestre`, params as any);
+  getTrimestral(params: { cursoId: string; anioLectivoId: string; materiaId: string; trimestre: 'T1'|'T2'|'T3' }) {
+    const p = new HttpParams()
+      .set('cursoId', params.cursoId)
+      .set('anioLectivoId', params.anioLectivoId)
+      .set('materiaId', params.materiaId)
+      .set('trimestre', params.trimestre);
+    return this.http.get<any>(`${this.baseUrl}/trimestre`, { params: p });
   }
 
-  finalJSON(params: { cursoId: string; anioLectivoId: string; materiaId: string }): Observable<any> {
-    return this.api.get<any>(`${this.base}/final`, params as any);
-  }
-
-  trimestrePDF(params: { cursoId: string; anioLectivoId: string; materiaId: string; trimestre: 'T1'|'T2'|'T3' }): Observable<Blob> {
-    return this.api.get<Blob>(`${this.base}/trimestre/pdf`, params as any);
-  }
-
-  finalPDF(params: { cursoId: string; anioLectivoId: string; materiaId: string }): Observable<Blob> {
-    return this.api.get<Blob>(`${this.base}/final/pdf`, params as any);
+  getFinal(params: { cursoId: string; anioLectivoId: string; estudianteId: string }) {
+    const p = new HttpParams()
+      .set('cursoId', params.cursoId)
+      .set('anioLectivoId', params.anioLectivoId)
+      .set('estudianteId', params.estudianteId);
+    return this.http.get<any>(`${this.baseUrl}/final`, { params: p });
   }
 }

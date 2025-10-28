@@ -19,7 +19,7 @@ export const AdminGuard: CanActivateFn = (route, state) => {
 
       // Si ya está autenticado → validar rol directamente
       if (isAuth) {
-        const role = (auth.role ?? '').toLowerCase();
+        const role = (auth.getrole() ?? '').toLowerCase();
         if (role === 'admin') return of(true);
         // Si no es admin (por ejemplo profesor) → redirigir a su vista
         return of(router.createUrlTree(['/app/mis-cursos']));
@@ -29,7 +29,7 @@ export const AdminGuard: CanActivateFn = (route, state) => {
       return auth.ensureUserLoaded().pipe(
         map(ok => {
           if (!ok) return router.createUrlTree(['/login'], { queryParams: { returnUrl } });
-          const role = (auth.role ?? '').toLowerCase();
+          const role = (auth.getrole() ?? '').toLowerCase();
           return role === 'admin'
             ? true
             : router.createUrlTree(['/app/mis-cursos']);

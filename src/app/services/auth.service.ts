@@ -68,20 +68,19 @@ export class AuthService {
     return localStorage.getItem(TOKEN_KEY);
   }
 
-  get user(): CurrentUser | null {
+  getuser(): CurrentUser | null {
     return this._userSubject.value;
   }
 
-  get role(): string | null {
+  getrole(): string | null {
     return this._userSubject.value?.rol ?? null;
   }
 
-  get isProfesor(): boolean {
-    return (this.role ?? '').toLowerCase() === 'profesor';
+  getisProfesor(): boolean {
+    return (this.getrole() ?? '').toLowerCase() === 'profesor';
   }
-
-  get isAdmin(): boolean {
-    return (this.role ?? '').toLowerCase() === 'admin';
+  getisAdmin(): boolean {
+    return (this.getrole() ?? '').toLowerCase() === 'admin';
   } // --- Flujo de Autenticación ---
 
   logout(): void {

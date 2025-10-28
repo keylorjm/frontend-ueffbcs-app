@@ -62,7 +62,7 @@ export class LoginComponent {
         next: () => {
           deferChange(() => {
             const rawReturn = this.route.snapshot.queryParamMap.get('returnUrl') ?? '';
-            const role = (this.authService.role ?? '').toLowerCase();
+            const role = (this.authService.getrole() ?? '').toLowerCase();
 
             const adminOnly = ['/app/usuarios', '/app/cursos', '/app/materias', '/app/estudiantes', '/app/calificaciones'];
             const isAdminOnlyReturn = adminOnly.some(p => rawReturn.startsWith(p));

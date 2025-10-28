@@ -19,7 +19,7 @@ export const ProfesorGuard: CanActivateFn = (route, state) => {
 
       // Ya autenticado → validar rol directamente
       if (isAuth) {
-        const role = (auth.role ?? '').toLowerCase();
+        const role = (auth.getrole() ?? '').toLowerCase();
         if (role === 'profesor') return of(true);
         // Si es admin → mandarlo al panel admin
         return of(router.createUrlTree(['/app/usuarios']));
@@ -29,7 +29,7 @@ export const ProfesorGuard: CanActivateFn = (route, state) => {
       return auth.ensureUserLoaded().pipe(
         map(ok => {
           if (!ok) return router.createUrlTree(['/login'], { queryParams: { returnUrl } });
-          const role = (auth.role ?? '').toLowerCase();
+          const role = (auth.getrole() ?? '').toLowerCase();
           return role === 'profesor'
             ? true
             : router.createUrlTree(['/app/usuarios']);

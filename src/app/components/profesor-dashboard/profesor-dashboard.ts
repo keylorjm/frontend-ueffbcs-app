@@ -1,39 +1,144 @@
-import { Component, inject } from '@angular/core';
+// src/app/pages/profesor/profesor-dashboard.component.ts
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { MatCardModule } from '@angular/material/card';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatChipsModule } from '@angular/material/chips';
 import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
+import { Router } from '@angular/router';
+
 import { AuthService } from '../../services/auth.service';
+import { CursoService } from '../../services/curso.service';
 
 @Component({
-  selector: 'app-profesor-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterModule, MatButtonModule, MatIconModule],
+  selector: 'app-profesor-dashboard',
+  imports: [CommonModule, MatCardModule, MatSnackBarModule, MatChipsModule, MatButtonModule],
   template: `
-    <div class="min-h-screen bg-gray-50 p-6">
-      <header class="mb-6 flex items-center justify-between">
-        <div>
-          <h1 class="text-3xl font-bold">Dashboard Profesor</h1>
-          <p class="text-gray-600">Bienvenido, {{ auth.user?.nombre || auth.user?.email }}</p>
-        </div>
-        <button mat-stroked-button color="primary" [routerLink]="['/profesor/mis-cursos']">
-          <mat-icon>school</mat-icon>
-          Mis cursos
-        </button>
-      </header>
-
-      <section class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <h2 class="text-xl font-semibold mb-2">Accesos rápidos</h2>
-        <div class="flex gap-3">
-          <button mat-flat-button color="primary" [routerLink]="['/profesor/mis-cursos']">
-            <mat-icon>menu_book</mat-icon>
-            Ver mis cursos
-          </button>
-        </div>
-      </section>
+  <div class="wrap">
+    <div class="header">
+      <h1>👨‍🏫 Panel del Profesor</h1>
+      <p class="subtitle">Selecciona un curso y materia para registrar notas (masivo o individual) o generar reportes.</p>
     </div>
-  `
+
+    <div class="grid" *ngIf="cursosFiltrados()?.length; else vacio">
+      <mat-card class="item" *ngFor="let c of cursosFiltrados()">
+        <div class="title">{{ c.nombre }}</div>
+        <div class="chips">
+          <mat-chip appearance="outlined" color="primary">Año: {{ c.anioLectivo?.nombre ?? c.anioLectivo }}</mat-chip>
+          <mat-chip appearance="outlined">Estudiantes: {{ c.estudiantes?.length ?? 0 }}</mat-chip>
+        </div>
+
+        <div class="materias">
+          <div class="m-row" *ngFor="let m of materiasDelProfesor(c)">
+            <div class="m-name">📘 {{ m.materia?.nombre ?? m.materia }}</div>
+            <div class="m-actions">
+              <button mat-stroked-button (click)="irANotasMasivo(c, m)">Notas (tabla)</button>
+              <button mat-stroked-button (click)="irAReportes(c, m)">Reportes</button>
+              <button mat-flat-button color="primary" (click)="irANotaIndividual(c, m)">Nota individual</button>
+            </div>
+          </div>
+        </div>
+      </mat-card>
+    </div>
+
+    <ng-template #vacio>
+      <div class="empty">No tienes materias asignadas en los cursos.</div>
+    </ng-template>
+  </div>
+  `,
+  styles: [`
+    .wrap { padding: 24px; max-width: 1000px; margin: 0 auto; display: grid; gap: 14px; }
+    .header h1 { margin: 0; font-size: 24px; font-weight: 800; }
+    .subtitle { margin: 2px 0 0; opacity: .7; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+    .item { padding: 14px; border-radius: 16px; display: grid; gap: 10px; }
+    .title { font-weight: 700; font-size: 18px; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .materias { display: grid; gap: 8px; }
+    .m-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 8px; border: 1px solid #ececec; border-radius: 10px; }
+    .m-name { font-weight: 600; }
+    .m-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .empty { text-align: center; opacity: .6; padding: 32px; }
+  `]
 })
-export class ProfesorDashboardComponent {
-  auth = inject(AuthService);
+export class ProfesorDashboardComponent implements OnInit {
+  private sb = inject(MatSnackBar);
+  private auth = inject(AuthService);
+  private cursoSvc = inject(CursoService);
+  private router = inject(Router);
+
+  cursos = signal<any[]>([]);
+  meId = signal<string>('');
+
+  ngOnInit() {
+    this.auth.ensureUserLoaded().subscribe(() => {
+      this.meId.set(this.auth.getuser()?.id ?? '');
+      this.cursoSvc.listar().subscribe({
+        next: (res: any) => this.cursos.set(res?.data ?? res ?? []),
+        error: () => this.sb.open('No se pudieron cargar los cursos', 'Cerrar', { duration: 3000 })
+      });
+    });
+  }
+
+  cursosFiltrados = computed(() => {
+    const me = this.meId();
+    return (this.cursos() ?? []).filter((c: any) =>
+      (c.materias ?? []).some((m: any) => this.asId(m?.profesor) === me)
+    );
+  });
+
+  materiasDelProfesor(curso: any) {
+    const me = this.meId();
+    return (curso.materias ?? []).filter((m: any) => this.asId(m?.profesor) === me);
+  }
+
+  // Navega a notas MASIVO (tabla) - ruta bajo /app/profesor/notas
+  irANotasMasivo(curso: any, m: any) {
+    const cursoId = this.asId(curso?._id);
+    const anioId = this.asId(curso?.anioLectivo);
+    const materiaId = this.asId(m?.materia);
+    if (!cursoId || !anioId || !materiaId) {
+      this.sb.open('No se puede abrir notas: IDs inválidos', 'Cerrar', { duration: 2500 });
+      return;
+    }
+    this.router.navigate(['/app/profesor/notas'], {
+      queryParams: { curso: cursoId, anioLectivo: anioId, materia: materiaId, trimestre: 'T1' }
+    });
+  }
+
+  // Navega a REPORTES - ruta bajo /app/profesor/reportes
+  irAReportes(curso: any, m: any) {
+    const cursoId = this.asId(curso?._id);
+    const anioId = this.asId(curso?.anioLectivo);
+    const materiaId = this.asId(m?.materia);
+    if (!cursoId || !anioId || !materiaId) {
+      this.sb.open('No se puede abrir reportes: IDs inválidos', 'Cerrar', { duration: 2500 });
+      return;
+    }
+    this.router.navigate(['/app/profesor/reportes'], {
+      queryParams: { curso: cursoId, anioLectivo: anioId, materia: materiaId, trimestre: 1 }
+    });
+  }
+
+  // ✅ NUEVO: Navega a NOTA INDIVIDUAL - ruta /app/profesor-notas (tu componente ProfesorNotasCursoComponent)
+  irANotaIndividual(curso: any, m: any) {
+    const cursoId = this.asId(curso?._id);
+    const anioId = this.asId(curso?.anioLectivo);
+    const materiaId = this.asId(m?.materia);
+    if (!cursoId || !anioId || !materiaId) {
+      this.sb.open('No se puede abrir nota individual: IDs inválidos', 'Cerrar', { duration: 2500 });
+      return;
+    }
+    this.router.navigate(['/app/profesor-notas'], {
+      queryParams: { curso: cursoId, anioLectivo: anioId, materia: materiaId, trimestre: 'T1' }
+    });
+  }
+
+  private asId(val: any): string {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object' && val._id) return String(val._id);
+    return '';
+  }
 }

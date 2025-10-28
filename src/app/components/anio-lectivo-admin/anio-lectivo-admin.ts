@@ -88,7 +88,12 @@ type UIAnio = AnioLectivo & { anioInicio?: number; anioFin?: number };
 
         <!-- Tabla estilo captura -->
         <div class="table-wrap table-slim">
-          <table mat-table [dataSource]="filtrados()" class="table compact modern-table">
+          <table
+            mat-table
+            [dataSource]="filtrados()"
+            [trackBy]="trackById"
+            class="table compact modern-table"
+          >
             <!-- Nombre -->
             <ng-container matColumnDef="nombre">
               <th mat-header-cell *matHeaderCellDef>Nombre</th>
@@ -161,7 +166,7 @@ type UIAnio = AnioLectivo & { anioInicio?: number; anioFin?: number };
             </ng-container>
 
             <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayedColumns; trackBy: trackById"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
 
             <tr *ngIf="!isBusy() && filtrados().length === 0">
               <td [attr.colspan]="displayedColumns.length" class="empty-state">
@@ -174,7 +179,6 @@ type UIAnio = AnioLectivo & { anioInicio?: number; anioFin?: number };
     </section>
 
     <!-- ========== DIÁLOGO: Formulario suave (look de la captura) ========== -->
-    <!-- ========== DIÁLOGO COMPACTO: Nuevo Año Lectivo ========== -->
     <ng-template #dialogForm>
       <form [formGroup]="form" (ngSubmit)="guardar()" class="soft-form compact" novalidate>
         <div class="soft-panel small">
@@ -246,6 +250,28 @@ type UIAnio = AnioLectivo & { anioInicio?: number; anioFin?: number };
           </div>
         </div>
       </form>
+    </ng-template>
+
+    <!-- ========== DIÁLOGO: Confirmar eliminación ========== -->
+    <ng-template #dialogConfirm let-data>
+      <div class="confirm">
+        <div class="confirm-header">
+          <mat-icon color="warn">warning</mat-icon>
+          <div class="confirm-title">Eliminar año lectivo</div>
+        </div>
+
+        <div class="confirm-body">
+          ¿Seguro que deseas eliminar "<strong>{{ data?.nombre }}</strong>"?
+          Esta acción no se puede deshacer.
+        </div>
+
+        <div class="confirm-footer">
+          <button mat-button class="btn-outline" mat-dialog-close="false">Cancelar</button>
+          <button mat-raised-button color="warn" class="btn-soft-primary" mat-dialog-close="true">
+            Eliminar
+          </button>
+        </div>
+      </div>
     </ng-template>
   `,
   styles: [
@@ -437,7 +463,6 @@ type UIAnio = AnioLectivo & { anioInicio?: number; anioFin?: number };
       }
 
       /* ==== Versión compacta del diálogo ==== */
-      /* ==== Versión mejorada y más aireada del diálogo ==== */
       .soft-panel.small {
         padding: 18px 22px 16px;
         max-width: 500px;
@@ -674,11 +699,11 @@ export class AnioLectivoAdminComponent implements OnInit {
       });
   }
 
-  year(v?: string): number | undefined {
-    if (!v) return undefined;
-    const d = new Date(v);
-    return isNaN(d.getTime()) ? undefined : d.getFullYear();
-  }
+ year(v?: string): number | undefined {
+  if (!v) return undefined;
+  const m = /^(\d{4})/.exec(v);
+  return m ? Number(m[1]) : undefined;
+}
 
   private asStr(v?: number): string {
     return v == null ? '' : String(v);
@@ -774,6 +799,11 @@ export class AnioLectivoAdminComponent implements OnInit {
   }
 
   eliminar(r: AnioLectivo): void {
+    // Validación defensiva del id
+    if (!r?._id) {
+      this.snack.open('No se encontró el identificador del registro.', 'Cerrar', { duration: 2500 });
+      return;
+    }
     this.isBusy.set(true);
     this.svc.delete(r._id).subscribe({
       next: () => {

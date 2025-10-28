@@ -46,30 +46,40 @@ export const routes: Routes = [
         path: 'mis-cursos',
         canActivate: [ProfesorGuard],
         loadComponent: () =>
-          import('./components/profesor-mis-cursos/profesor-mis-cursos').then(
-            (m) => m.ProfesorMisCursosComponent
+          import('./components/profesor-dashboard/profesor-dashboard').then(
+            (m) => m.ProfesorDashboardComponent
           ),
         title: 'Mis Cursos',
       },
+
       {
-        path: 'profesor',
-        canActivate: [AuthGuard, ProfesorGuard],
-        children: [
-          {
-            path: 'curso/:id/notas',
-            loadComponent: () =>
-              import('./components/profesor-notas-curso/profesor-notas-curso').then(
-                (m) => m.ProfesorNotasCursoComponent
-              ),
-          },
-          {
-            path: 'curso/:id/ingreso',
-            loadComponent: () =>
-              import('./components/ingreso-notas/ingreso-notas').then(
-                (m) => m.IngresoNotasComponent
-              ),
-          },
-        ],
+        path: 'profesor-notas',
+        canActivate: [ProfesorGuard],
+        loadComponent: () =>
+          import('./components/profesor-notas-curso/profesor-notas-curso').then(
+            (m) => m.ProfesorNotasCursoComponent
+          ),
+        title: 'Registro de Notas',
+      },
+
+      {
+        path: 'profesor-notas-trimestrales',
+        canActivate: [ProfesorGuard],
+        loadComponent: () =>
+          import('./components/notas-trimestrales/notas-trimestrales').then(
+            (m) => m.NotasTrimestralesComponent
+          ),
+        title: 'Registro de Notas',
+      },
+
+      {
+        path: 'reportes',
+        canActivate: [ProfesorGuard],
+        loadComponent: () =>
+          import('./components/profesor-reportes/profesor-reportes').then(
+            (m) => m.ProfesorReportesComponent
+          ),
+        title: 'Reportes del Profesor',
       },
 
       {
@@ -104,16 +114,7 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./components/materias/materias').then((m) => m.MateriasComponent),
         title: 'Gestión de Materias',
-      },    
-
-      {
-        path: 'profesor-notas',
-        loadComponent: () =>
-          import('./components/profesor-notas-curso/profesor-notas-curso').then(
-            (m) => m.ProfesorNotasCursoComponent
-          ),
-        title: 'Detalle del Curso',
-      },     
+      },
 
       { path: '**', redirectTo: 'mis-cursos' },
     ],

@@ -20,9 +20,9 @@ import { Observable, map } from 'rxjs';
           <mat-icon matListItemIcon>dashboard</mat-icon>
           <span matListItemTitle>Mis Cursos</span>
         </a>
-        <a mat-list-item routerLink="/app/profesor-notas" routerLinkActive="active-link">
+        <a mat-list-item routerLink="/app/asistencias" routerLinkActive="active-link">
           <mat-icon matListItemIcon>edit_square</mat-icon>
-          <span matListItemTitle>Calificaciones</span>
+          <span matListItemTitle>Asistencias</span>
         </a>
       </ng-container>
 

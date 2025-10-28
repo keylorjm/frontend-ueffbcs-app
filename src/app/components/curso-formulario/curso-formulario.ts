@@ -1,6 +1,7 @@
 // src/app/pages/admin/curso-formulario.ts
 import { Component, EventEmitter, Input, OnInit, Output, Signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import {
   ReactiveFormsModule,
   FormBuilder,
@@ -44,7 +45,7 @@ export interface MateriaCatalogoItem {
   imports: [
     CommonModule, ReactiveFormsModule,
     MatDialogModule, MatFormFieldModule, MatSelectModule, MatInputModule,
-    MatButtonModule, MatIconModule, MatSnackBarModule, MatDividerModule,
+    MatButtonModule, MatIconModule, MatSnackBarModule, MatDividerModule,FormsModule,
   ],
   template: `
   <!-- Header del diálogo -->

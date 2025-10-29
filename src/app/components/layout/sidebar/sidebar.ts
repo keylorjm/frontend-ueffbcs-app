@@ -7,11 +7,12 @@ import { MatListModule } from '@angular/material/list';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthService } from '../../../services/auth.service';
 import { Observable, map } from 'rxjs';
+import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-sidebar',
   standalone: true,
-  imports: [CommonModule, RouterModule, MatSidenavModule, MatListModule, MatIconModule],
+  imports: [CommonModule, RouterModule, MatSidenavModule, MatListModule, MatIconModule,FormsModule],
   template: `
     <mat-nav-list *ngIf="role$ | async as role">
       <!-- 🔹 PROFESOR: solo ve Mis Cursos -->
@@ -20,9 +21,26 @@ import { Observable, map } from 'rxjs';
           <mat-icon matListItemIcon>dashboard</mat-icon>
           <span matListItemTitle>Mis Cursos</span>
         </a>
-        <a mat-list-item routerLink="/app/asistencias" routerLinkActive="active-link">
+
+        <a mat-list-item routerLink="/app/resumen" routerLinkActive="active-link">
+          <mat-icon matListItemIcon>rubric</mat-icon>
+          <span matListItemTitle>Notas</span>
+        </a>
+
+         <a mat-list-item routerLink="/app/profesor-notas" routerLinkActive="active-link">
+          <mat-icon matListItemIcon>grading</mat-icon>
+          <span matListItemTitle>Asignar Notas</span>
+        </a>
+
+        <a mat-list-item routerLink="/app/asistencia" routerLinkActive="active-link">
           <mat-icon matListItemIcon>edit_square</mat-icon>
           <span matListItemTitle>Asistencias</span>
+        </a>    
+
+
+        <a mat-list-item routerLink="/app/reportes" routerLinkActive="active-link">
+          <mat-icon matListItemIcon>assignment</mat-icon>
+          <span matListItemTitle>Reportes</span>
         </a>
       </ng-container>
 

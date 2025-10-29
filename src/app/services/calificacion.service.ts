@@ -2,148 +2,119 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '../environments/environment';
-import { Observable, map } from 'rxjs';
 
-/** === Tipos base (tu API) === */
+/** Trimestres soportados */
 export type Trimestre = 'T1' | 'T2' | 'T3';
 
-export interface NotaTrimestre {
-  promedioTrimestral: number | null;
-  faltasJustificadas?: number;
-  faltasInjustificadas?: number;
-  asistenciaTotal?: number;
-}
-
-export interface NotaTrimestreInputRow {
+/** Fila de entrada (UI 0..10) para envío en bulk */
+export interface NotaTrimestreInputRow10 {
   estudianteId: string;
+  /** Escala 0..10 (null si no registra) */
   promedioTrimestral: number | null;
-  faltasJustificadas?: number;
-  faltasInjustificadas?: number;
-  asistenciaTotal?: number;
 }
 
-export interface BulkTrimestrePayload {
+/** Payload para POST /api/calificaciones/bulk-trimestre (0..10) */
+export interface BulkTrimestrePayload10 {
   cursoId: string;
   anioLectivoId: string;
   materiaId: string;
   trimestre: Trimestre;
-  rows: NotaTrimestreInputRow[];
+  rows: NotaTrimestreInputRow10[];
 }
 
-export interface EvaluacionFinalPayload {
+/** Respuesta GET /api/calificaciones (0..10) */
+export interface CalificacionesGetResponse10 {
+  estudiantes: Array<{
+    estudianteId: string;
+    estudianteNombre?: string;
+    /** Escala 0..10 (puede venir null si aún no hay nota) */
+    promedioTrimestral: number | null;
+  }>;
+}
+
+/** (Opcional) payload para final anual (0..10) */
+export interface EvaluacionFinalPayload10 {
   cursoId: string;
   anioLectivoId: string;
   estudianteId: string;
-  // materiaId?: string; // habilítalo si tu backend lo requiere también para final
-  evaluacionFinal?: number | null;
+  materiaId?: string;
+  evaluacionFinal?: number | null;   // 0..10
   cualitativaFinal?: string | null;
   observacionFinal?: string | null;
 }
 
-/** === Tipos de respuesta recomendados (flexibles ante populate o IDs planos) === */
-export interface NotaTrimestreItemAPI {
-  estudianteId: string;                 // id plano
-  estudianteNombre?: string;            // opcional, por si el backend lo adjunta
-  promedioTrimestral?: number | null;
-  faltasJustificadas?: number;
-  faltasInjustificadas?: number;
-  asistenciaTotal?: number;
-}
-
-export interface NotasTrimestreResponse {
-  curso: { _id: string; nombre?: string } | string;
-  anioLectivo: { _id: string; nombre?: string } | string;
-  materia: { _id: string; nombre?: string } | string;
-  trimestre?: Trimestre;
-  estudiantes: NotaTrimestreItemAPI[];  // arreglo por estudiante
-}
-
-export interface CargarBulkResponse {
-  ok: boolean;
-  updated?: number;                     // cantidad de registros actualizados
-  message?: string;
-}
-
-export interface CargarFinalResponse {
-  ok: boolean;
-  message?: string;
-}
-
-/** === Servicio === */
 @Injectable({ providedIn: 'root' })
 export class CalificacionService {
   private http = inject(HttpClient);
   private baseUrl = `${environment.apiUrl}/calificaciones`;
 
+  // ============ LECTURA (UI 0..10) ============
   /**
-   * GET /calificaciones
-   * Params: cursoId, anioLectivoId, materiaId, trimestre?
+   * Obtiene notas del trimestre (devuelve 0..10).
+   * GET /api/calificaciones?cursoId=&anioLectivoId=&materiaId=&trimestre=
    */
   obtenerNotas(params: {
     cursoId: string;
     anioLectivoId: string;
     materiaId: string;
-    trimestre?: Trimestre;
-  }): Observable<NotasTrimestreResponse> {
+    trimestre: Trimestre;
+  }) {
     let p = new HttpParams()
       .set('cursoId', params.cursoId)
       .set('anioLectivoId', params.anioLectivoId)
-      .set('materiaId', params.materiaId);
-    if (params.trimestre) p = p.set('trimestre', params.trimestre);
+      .set('materiaId', params.materiaId)
+      .set('trimestre', params.trimestre);
 
-    return this.http.get<NotasTrimestreResponse>(`${this.baseUrl}`, { params: p }).pipe(
-      map((res) => this.normalizarNotasTrimestreResponse(res))
-    );
+    return this.http.get<CalificacionesGetResponse10>(`${this.baseUrl}`, { params: p });
+  }
+
+  // ============ ESCRITURA (UI 0..10) ============
+  /**
+   * Guarda/actualiza en bloque las notas del trimestre (0..10).
+   * POST /api/calificaciones/bulk-trimestre
+   */
+  cargarTrimestreBulk(payload10: BulkTrimestrePayload10) {
+    // Aseguramos limpieza/clamp antes de enviar
+    const clean = this.buildBulkPayload({
+      cursoId: payload10.cursoId,
+      anioLectivoId: payload10.anioLectivoId,
+      materiaId: payload10.materiaId,
+      trimestre: payload10.trimestre,
+      tableRows: payload10.rows,
+    });
+    return this.http.post<any>(`${this.baseUrl}/bulk-trimestre`, clean);
   }
 
   /**
-   * POST /calificaciones/bulk-trimestre
-   * Guarda en lote las notas de un trimestre para una materia de un curso.
+   * (Opcional) Guarda el final anual materializado (0..10).
+   * POST /api/calificaciones/final
    */
-  cargarTrimestreBulk(payload: BulkTrimestrePayload): Observable<CargarBulkResponse> {
-    const limpio = this.sanitizarBulkPayload(payload);
-    return this.http.post<CargarBulkResponse>(`${this.baseUrl}/bulk-trimestre`, limpio);
-  }
-
-  /**
-   * POST /calificaciones/final
-   * Guarda evaluación/cualitativa/observación final por estudiante (y opcional materia).
-   */
-  cargarFinal(payload: EvaluacionFinalPayload): Observable<CargarFinalResponse> {
-    const limpio = this.sanitizarFinalPayload(payload);
-    return this.http.post<CargarFinalResponse>(`${this.baseUrl}/final`, limpio);
-  }
-
-  /** === Helpers de dominio (opcionales pero útiles para la UI) === */
-
-  /**
-   * Normaliza la respuesta del backend a una estructura consistente para la tabla.
-   * - Garantiza números (0) cuando vengan undefined/null.
-   * - Asegura arreglo vacío si no hay estudiantes.
-   */
-  private normalizarNotasTrimestreResponse(res: any): NotasTrimestreResponse {
-    const estudiantesRaw: any[] = Array.isArray(res?.estudiantes) ? res.estudiantes : [];
-    const estudiantes = estudiantesRaw.map((e) => ({
-      estudianteId: this.asId(e?.estudiante ?? e?.estudianteId ?? e?.id ?? e),
-      estudianteNombre: e?.estudianteNombre ?? e?.nombre ?? e?.estudiante?.nombre ?? '—',
-      promedioTrimestral: this.toNumOrNull(e?.promedioTrimestral),
-      faltasJustificadas: this.toNumber(e?.faltasJustificadas, 0),
-      faltasInjustificadas: this.toNumber(e?.faltasInjustificadas, 0),
-      asistenciaTotal: this.toNumber(e?.asistenciaTotal, 0),
-    })) as NotaTrimestreItemAPI[];
-
-    return {
-      curso: res?.curso ?? '',
-      anioLectivo: res?.anioLectivo ?? '',
-      materia: res?.materia ?? '',
-      trimestre: res?.trimestre as Trimestre | undefined,
-      estudiantes
+  cargarFinal(payload10: EvaluacionFinalPayload10) {
+    const body: any = {
+      cursoId: payload10.cursoId,
+      anioLectivoId: payload10.anioLectivoId,
+      estudianteId: payload10.estudianteId,
+      materiaId: payload10.materiaId,
+      evaluacionFinal:
+        payload10.evaluacionFinal == null ? null : this.clamp10(payload10.evaluacionFinal),
+      cualitativaFinal: payload10.cualitativaFinal ?? undefined,
+      observacionFinal: payload10.observacionFinal ?? undefined,
     };
+    return this.http.post<any>(`${this.baseUrl}/final`, body);
+  }
+
+  // ============ HELPERS ============
+  /** Normaliza/clamp a 0..10 o null */
+  private clamp10(n: any): number | null {
+    if (n === null || n === undefined) return null;
+    const v = Number(n);
+    if (Number.isNaN(v)) return null;
+    return Math.max(0, Math.min(10, v));
   }
 
   /**
-   * Construye el payload Bulk desde una tabla de edición.
-   * Valida rangos básicos: promedio 0..100, faltas >= 0.
+   * Construye un payload BULK (0..10) a partir de filas de UI (ya validadas).
+   * Limpia NaN, clamp 0..10 y asegura tipos string en IDs.
    */
   buildBulkPayload(input: {
     cursoId: string;
@@ -152,94 +123,51 @@ export class CalificacionService {
     trimestre: Trimestre;
     tableRows: Array<{
       estudianteId: string;
-      promedioTrimestral: number | null | undefined;
-      faltasJustificadas?: number | null | undefined;
-      faltasInjustificadas?: number | null | undefined;
-      asistenciaTotal?: number | null | undefined;
+      promedioTrimestral: number | null | undefined; // 0..10 o null
     }>;
-  }): BulkTrimestrePayload {
-    const rows: NotaTrimestreInputRow[] = (input.tableRows ?? []).map((r) => ({
+  }): BulkTrimestrePayload10 {
+    const rows: NotaTrimestreInputRow10[] = input.tableRows.map((r) => ({
       estudianteId: String(r.estudianteId),
-      promedioTrimestral: this.clampProm(r.promedioTrimestral),
-      faltasJustificadas: this.toNumber(r.faltasJustificadas, 0),
-      faltasInjustificadas: this.toNumber(r.faltasInjustificadas, 0),
-      asistenciaTotal: this.toNumber(r.asistenciaTotal, 0),
+      promedioTrimestral: this.clamp10(r.promedioTrimestral),
     }));
+
     return {
-      cursoId: String(input.cursoId),
-      anioLectivoId: String(input.anioLectivoId),
-      materiaId: String(input.materiaId),
+      cursoId: input.cursoId,
+      anioLectivoId: input.anioLectivoId,
+      materiaId: input.materiaId,
       trimestre: input.trimestre,
-      rows
+      rows,
     };
   }
 
   /**
-   * Cualitativa por escala (puedes ajustar los umbrales a tu normativa).
+   * Calcula promedio final (0..10) a partir de T1, T2, T3 (0..10).
+   * Regla: final = (T1 + T2 + T3) / 3, redondeado a 1 decimal.
+   * Si falta alguna, promedia con las presentes; si todas faltan, retorna null.
    */
-  cualitativa(prom: number | null | undefined): string {
-    const p = Number(prom ?? 0);
-    if (p >= 90) return 'Excelente';
-    if (p >= 80) return 'Muy Bueno';
-    if (p >= 70) return 'Bueno';
-    if (p >= 60) return 'Regular';
+  promedioFinal10(
+    t1: number | null | undefined,
+    t2: number | null | undefined,
+    t3: number | null | undefined
+  ): number | null {
+    const vals = [t1, t2, t3]
+      .map((v) => (v == null ? null : Number(v)))
+      .filter((v): v is number => typeof v === 'number' && !Number.isNaN(v));
+    if (!vals.length) return null;
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    return Math.round(avg * 10) / 10;
+  }
+
+  /**
+   * Cualitativa estándar desde 0..10 (ajusta rangos a tu reglamento si necesitas).
+   */
+  cualitativaFrom10(n0_10: number | null | undefined): string {
+    if (n0_10 == null || Number.isNaN(Number(n0_10))) return 'Sin registro';
+    const n = Number(n0_10);
+    if (n >= 9) return 'Excelente';
+    if (n >= 8) return 'Muy Bueno';
+    if (n >= 7) return 'Bueno';
+    if (n >= 6) return 'Regular';
     return 'Insuficiente';
-  }
-
-  /** === Sanitizadores/validaciones internas === */
-
-  private sanitizarBulkPayload(p: BulkTrimestrePayload): BulkTrimestrePayload {
-    return {
-      ...p,
-      cursoId: String(p.cursoId),
-      anioLectivoId: String(p.anioLectivoId),
-      materiaId: String(p.materiaId),
-      trimestre: p.trimestre,
-      rows: (p.rows ?? []).map((r) => ({
-        estudianteId: String(r.estudianteId),
-        promedioTrimestral: this.clampProm(r.promedioTrimestral),
-        faltasJustificadas: this.toNumber(r.faltasJustificadas, 0),
-        faltasInjustificadas: this.toNumber(r.faltasInjustificadas, 0),
-        asistenciaTotal: this.toNumber(r.asistenciaTotal, 0),
-      }))
-    };
-  }
-
-  private sanitizarFinalPayload(p: EvaluacionFinalPayload): EvaluacionFinalPayload {
-    const evaluacionFinal = this.clampProm(p.evaluacionFinal);
-    const cualitativaFinal = p.cualitativaFinal ?? (evaluacionFinal != null ? this.cualitativa(evaluacionFinal) : null);
-    return {
-      ...p,
-      cursoId: String(p.cursoId),
-      anioLectivoId: String(p.anioLectivoId),
-      estudianteId: String(p.estudianteId),
-      evaluacionFinal,
-      cualitativaFinal,
-      observacionFinal: p.observacionFinal ?? null
-    };
-  }
-
-  /** === Utils seguros === */
-
-  private toNumber(v: any, def = 0): number {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : def;
-  }
-  private toNumOrNull(v: any): number | null {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-    }
-  private clampProm(v: any): number | null {
-    const n = this.toNumOrNull(v);
-    if (n == null) return null;
-    if (n < 0) return 0;
-    if (n > 100) return 100;
-    return n;
-  }
-  private asId(val: any): string {
-    if (!val) return '';
-    if (typeof val === 'string') return val;
-    if (typeof val === 'object' && val._id) return String(val._id);
-    return String(val);
   }
 }

@@ -15,52 +15,104 @@ import { CursoService } from '../../services/curso.service';
   selector: 'app-profesor-dashboard',
   imports: [CommonModule, MatCardModule, MatSnackBarModule, MatChipsModule, MatButtonModule],
   template: `
-  <div class="wrap">
-    <div class="header">
-      <h1>👨‍🏫 Panel del Profesor</h1>
-      <p class="subtitle">Selecciona un curso y materia para registrar notas (masivo o individual) o generar reportes.</p>
-    </div>
+    <div class="wrap">
+      <div class="header">
+        <h1>👨‍🏫 Panel del Profesor</h1>
+        <p class="subtitle">
+          Selecciona un curso y materia para registrar notas (masivo o individual) o generar
+          reportes.
+        </p>
+      </div>
 
-    <div class="grid" *ngIf="cursosFiltrados()?.length; else vacio">
-      <mat-card class="item" *ngFor="let c of cursosFiltrados()">
-        <div class="title">{{ c.nombre }}</div>
-        <div class="chips">
-          <mat-chip appearance="outlined" color="primary">Año: {{ c.anioLectivo?.nombre ?? c.anioLectivo }}</mat-chip>
-          <mat-chip appearance="outlined">Estudiantes: {{ c.estudiantes?.length ?? 0 }}</mat-chip>
-        </div>
+      <div class="grid" *ngIf="cursosFiltrados()?.length; else vacio">
+        <mat-card class="item" *ngFor="let c of cursosFiltrados()">
+          <div class="title">{{ c.nombre }}</div>
+          <div class="chips">
+            <mat-chip appearance="outlined" color="primary"
+              >Año: {{ c.anioLectivo?.nombre ?? c.anioLectivo }}</mat-chip
+            >
+            <mat-chip appearance="outlined">Estudiantes: {{ c.estudiantes?.length ?? 0 }}</mat-chip>
+          </div>
 
-        <div class="materias">
-          <div class="m-row" *ngFor="let m of materiasDelProfesor(c)">
-            <div class="m-name">📘 {{ m.materia?.nombre ?? m.materia }}</div>
-            <div class="m-actions">
-              <button mat-stroked-button (click)="irANotasMasivo(c, m)">Notas (tabla)</button>
-              <button mat-stroked-button (click)="irAReportes(c, m)">Reportes</button>
-              <button mat-flat-button color="primary" (click)="irANotaIndividual(c, m)">Nota individual</button>
+          <div class="materias">
+            <div class="m-row" *ngFor="let m of materiasDelProfesor(c)">
+              <div class="m-name">📘 {{ m.materia?.nombre ?? m.materia }}</div>              
             </div>
           </div>
-        </div>
-      </mat-card>
-    </div>
+        </mat-card>
+      </div>
 
-    <ng-template #vacio>
-      <div class="empty">No tienes materias asignadas en los cursos.</div>
-    </ng-template>
-  </div>
+      <ng-template #vacio>
+        <div class="empty">No tienes materias asignadas en los cursos.</div>
+      </ng-template>
+    </div>
   `,
-  styles: [`
-    .wrap { padding: 24px; max-width: 1000px; margin: 0 auto; display: grid; gap: 14px; }
-    .header h1 { margin: 0; font-size: 24px; font-weight: 800; }
-    .subtitle { margin: 2px 0 0; opacity: .7; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
-    .item { padding: 14px; border-radius: 16px; display: grid; gap: 10px; }
-    .title { font-weight: 700; font-size: 18px; }
-    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
-    .materias { display: grid; gap: 8px; }
-    .m-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 8px; border: 1px solid #ececec; border-radius: 10px; }
-    .m-name { font-weight: 600; }
-    .m-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    .empty { text-align: center; opacity: .6; padding: 32px; }
-  `]
+  styles: [
+    `
+      .wrap {
+        padding: 24px;
+        max-width: 1000px;
+        margin: 0 auto;
+        display: grid;
+        gap: 14px;
+      }
+      .header h1 {
+        margin: 0;
+        font-size: 24px;
+        font-weight: 800;
+      }
+      .subtitle {
+        margin: 2px 0 0;
+        opacity: 0.7;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 12px;
+      }
+      .item {
+        padding: 14px;
+        border-radius: 16px;
+        display: grid;
+        gap: 10px;
+      }
+      .title {
+        font-weight: 700;
+        font-size: 18px;
+      }
+      .chips {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .materias {
+        display: grid;
+        gap: 8px;
+      }
+      .m-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+        border: 1px solid #ececec;
+        border-radius: 10px;
+      }
+      .m-name {
+        font-weight: 600;
+      }
+      .m-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .empty {
+        text-align: center;
+        opacity: 0.6;
+        padding: 32px;
+      }
+    `,
+  ],
 })
 export class ProfesorDashboardComponent implements OnInit {
   private sb = inject(MatSnackBar);
@@ -76,7 +128,7 @@ export class ProfesorDashboardComponent implements OnInit {
       this.meId.set(this.auth.getuser()?.id ?? '');
       this.cursoSvc.listar().subscribe({
         next: (res: any) => this.cursos.set(res?.data ?? res ?? []),
-        error: () => this.sb.open('No se pudieron cargar los cursos', 'Cerrar', { duration: 3000 })
+        error: () => this.sb.open('No se pudieron cargar los cursos', 'Cerrar', { duration: 3000 }),
       });
     });
   }
@@ -91,49 +143,26 @@ export class ProfesorDashboardComponent implements OnInit {
   materiasDelProfesor(curso: any) {
     const me = this.meId();
     return (curso.materias ?? []).filter((m: any) => this.asId(m?.profesor) === me);
+  } 
+  
+  irAResumen(curso: any, m: any): void {
+  const cursoId = this.asId(curso?._id);
+  const anioId = this.asId(curso?.anioLectivo);
+  const materiaId = this.asId(m?.materia);
+
+  if (!cursoId || !anioId || !materiaId) {
+    this.sb.open('IDs inválidos', 'Cerrar', { duration: 2500 });
+    return;
   }
 
-  // Navega a notas MASIVO (tabla) - ruta bajo /app/profesor/notas
-  irANotasMasivo(curso: any, m: any) {
-    const cursoId = this.asId(curso?._id);
-    const anioId = this.asId(curso?.anioLectivo);
-    const materiaId = this.asId(m?.materia);
-    if (!cursoId || !anioId || !materiaId) {
-      this.sb.open('No se puede abrir notas: IDs inválidos', 'Cerrar', { duration: 2500 });
-      return;
-    }
-    this.router.navigate(['/app/profesor/notas'], {
-      queryParams: { curso: cursoId, anioLectivo: anioId, materia: materiaId, trimestre: 'T1' }
-    });
-  }
+  this.router.navigate(['/app/resumen'], {
+    queryParams: { curso: cursoId, anioLectivo: anioId, materia: materiaId }
+  });
+}
 
-  // Navega a REPORTES - ruta bajo /app/profesor/reportes
-  irAReportes(curso: any, m: any) {
-    const cursoId = this.asId(curso?._id);
-    const anioId = this.asId(curso?.anioLectivo);
-    const materiaId = this.asId(m?.materia);
-    if (!cursoId || !anioId || !materiaId) {
-      this.sb.open('No se puede abrir reportes: IDs inválidos', 'Cerrar', { duration: 2500 });
-      return;
-    }
-    this.router.navigate(['/app/profesor/reportes'], {
-      queryParams: { curso: cursoId, anioLectivo: anioId, materia: materiaId, trimestre: 1 }
-    });
-  }
 
-  // ✅ NUEVO: Navega a NOTA INDIVIDUAL - ruta /app/profesor-notas (tu componente ProfesorNotasCursoComponent)
-  irANotaIndividual(curso: any, m: any) {
-    const cursoId = this.asId(curso?._id);
-    const anioId = this.asId(curso?.anioLectivo);
-    const materiaId = this.asId(m?.materia);
-    if (!cursoId || !anioId || !materiaId) {
-      this.sb.open('No se puede abrir nota individual: IDs inválidos', 'Cerrar', { duration: 2500 });
-      return;
-    }
-    this.router.navigate(['/app/profesor-notas'], {
-      queryParams: { curso: cursoId, anioLectivo: anioId, materia: materiaId, trimestre: 'T1' }
-    });
-  }
+
+  
 
   private asId(val: any): string {
     if (!val) return '';

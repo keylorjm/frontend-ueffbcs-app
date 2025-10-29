@@ -1,130 +1,239 @@
 // src/app/components/profesor-notas-curso/profesor-notas-curso.ts
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule, NgForm } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 
 import { MatCardModule } from '@angular/material/card';
 import { MatSelectModule } from '@angular/material/select';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatTableModule } from '@angular/material/table';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { AuthService } from '../../services/auth.service';
 import { CursoService } from '../../services/curso.service';
-import { CalificacionService, Trimestre, BulkTrimestrePayload } from '../../services/calificacion.service';
+import { EstudianteService, Estudiante } from '../../services/estudiante.service';
+import { CalificacionService, Trimestre, BulkTrimestrePayload10 } from '../../services/calificacion.service';
 
 type MateriaAsignada = { materiaId: string; materiaNombre: string };
+
+type RowVM = {
+  estudianteId: string;
+  estudianteNombre: string;
+  /** UI: 0..10 directo */
+  promedioTrimestral: number | null;
+};
 
 @Component({
   standalone: true,
   selector: 'app-profesor-notas-curso',
   imports: [
     CommonModule, FormsModule,
-    MatCardModule, MatSelectModule, MatInputModule, MatButtonModule, MatSnackBarModule,
-    MatIconModule, MatDividerModule
+    MatCardModule, MatSelectModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatSnackBarModule,
+    MatIconModule, MatDividerModule, MatTableModule, MatProgressBarModule, MatTooltipModule
   ],
   template: `
   <div class="wrap">
     <mat-card class="card">
       <div class="header">
-        <div>
-          <h2>👨‍🏫 Notas por Estudiante</h2>
-          <div class="sub">Seleccione el curso asignado, el trimestre y el estudiante para registrar la nota.</div>
+        <div class="title-block">
+          <div class="eyebrow"><mat-icon>grading</mat-icon> Registro de calificaciones</div>
+          <h2 class="title">Notas por Curso (Trimestrales)</h2>
+          <p class="sub">Ingrese la <b>Nota Trimestral</b> en escala 0–10. La tabla es compacta para agilizar la captura.</p>
+        </div>
+        <div class="actions">
+          <button mat-stroked-button class="btn-outline" (click)="recargar()" matTooltip="Volver a cargar datos del curso">
+            <mat-icon>refresh</mat-icon>
+            <span>Recargar</span>
+          </button>
+          <button mat-flat-button color="primary" class="btn-primary" (click)="guardar()" [disabled]="guardando() || !rows().length">
+            <mat-icon>save</mat-icon>
+            <span>{{ guardando() ? 'Guardando...' : 'Guardar' }}</span>
+          </button>
         </div>
       </div>
 
-      <mat-divider></mat-divider>
+      <mat-divider class="soft-divider"></mat-divider>
 
-      <form #f="ngForm" (ngSubmit)="guardar(f)" class="form-grid">
-        <!-- Curso -->
-        <div class="field">
-          <label class="lbl">Curso</label>
+      <div class="filters">
+        <mat-form-field appearance="outline" class="ff dense">
+          <mat-label>Curso</mat-label>
           <mat-select [(ngModel)]="cursoId" name="cursoId" (selectionChange)="onCursoChange()" required>
-            <mat-option *ngFor="let c of cursos()" [value]="asId(c._id)">
-              {{ c.nombre }}
-            </mat-option>
+            <mat-option *ngFor="let c of cursos()" [value]="asId(c._id)">{{ c.nombre }}</mat-option>
           </mat-select>
-        </div>
+        </mat-form-field>
 
-        <!-- Materia (solo si el profesor tiene >1 materia asignada en ese curso) -->
-        <div class="field" *ngIf="materiasAsignadas().length > 1">
-          <label class="lbl">Materia</label>
-          <mat-select [(ngModel)]="materiaId" name="materiaId" required (selectionChange)="preloadNotasDelTrimestre()">
-            <mat-option *ngFor="let m of materiasAsignadas()" [value]="m.materiaId">
-              {{ m.materiaNombre }}
-            </mat-option>
+        <mat-form-field *ngIf="materiasAsignadas().length > 1" appearance="outline" class="ff dense">
+          <mat-label>Materia</mat-label>
+          <mat-select [(ngModel)]="materiaId" name="materiaId" (selectionChange)="cargarTabla()" required>
+            <mat-option *ngFor="let m of materiasAsignadas()" [value]="m.materiaId">{{ m.materiaNombre }}</mat-option>
           </mat-select>
-        </div>
+        </mat-form-field>
 
-        <!-- Trimestre -->
-        <div class="field">
-          <label class="lbl">Trimestre</label>
-          <mat-select [(ngModel)]="trimestre" name="trimestre" required (selectionChange)="preloadNotasDelTrimestre()">
+        <mat-form-field appearance="outline" class="ff dense">
+          <mat-label>Trimestre</mat-label>
+          <mat-select [(ngModel)]="trimestre" name="trimestre" (selectionChange)="cargarTabla()" required>
             <mat-option [value]="'T1'">Primer Trimestre</mat-option>
             <mat-option [value]="'T2'">Segundo Trimestre</mat-option>
             <mat-option [value]="'T3'">Tercer Trimestre</mat-option>
           </mat-select>
-        </div>
+        </mat-form-field>
 
-        <!-- Estudiante -->
-        <div class="field">
-          <label class="lbl">Estudiante</label>
-          <mat-select [(ngModel)]="estudianteId" name="estudianteId" required (selectionChange)="prefillDesdeNotas()">
-            <mat-option *ngFor="let e of estudiantesCurso()" [value]="asId(e._id)">
-              {{ e.nombre ?? e.fullname ?? e.email ?? '—' }}
-            </mat-option>
-          </mat-select>
-        </div>
+        <mat-form-field appearance="outline" class="ff dense search">
+          <mat-label>Buscar estudiante</mat-label>
+          <input
+            matInput
+            [ngModel]="q()"
+            (ngModelChange)="q.set($event); onSearchChange()"
+            placeholder="Escriba un nombre…"
+          />
+          <button *ngIf="q()" matSuffix mat-icon-button aria-label="Limpiar búsqueda" (click)="clearSearch()"><mat-icon>close</mat-icon></button>
+          <mat-icon matPrefix>search</mat-icon>
+        </mat-form-field>
+      </div>
 
-        <!-- Nota / Faltas -->
-        <div class="row2">
-          <div class="field">
-            <label class="lbl">Promedio Trimestral</label>
-            <input matInput type="number" min="0" max="100" [(ngModel)]="promedio" name="promedio"
-                   (ngModelChange)="cualitativa = caliSrv.cualitativa(promedio ?? 0)" required />
-          </div>
-          <div class="field">
-            <label class="lbl">Faltas Justificadas</label>
-            <input matInput type="number" min="0" [(ngModel)]="faltasJ" name="faltasJ" />
-          </div>
-          <div class="field">
-            <label class="lbl">Faltas Injustificadas</label>
-            <input matInput type="number" min="0" [(ngModel)]="faltasI" name="faltasI" />
-          </div>
-          <div class="field cuali">
-            <label class="lbl">Cualitativa</label>
-            <div class="badge" [class.ok]="(promedio ?? 0) >= 70" [class.warn]="(promedio ?? 0) < 70">
-              {{ cualitativa }}
+      <mat-progress-bar *ngIf="cargando()" mode="indeterminate"></mat-progress-bar>
+
+      <div class="table-wrap" *ngIf="viewRows().length; else noRows">
+        <table mat-table [dataSource]="viewRows()" class="modern-table compact mat-elevation-z1" aria-label="Tabla de estudiantes y notas">
+          <ng-container matColumnDef="n">
+            <th mat-header-cell *matHeaderCellDef class="sticky center">#</th>
+            <td mat-cell *matCellDef="let r; let i = index" class="muted center">{{ pageStart() + i + 1 }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="est">
+            <th mat-header-cell *matHeaderCellDef class="sticky">Estudiante</th>
+            <td mat-cell *matCellDef="let r">
+              <div class="student-cell">
+                <div class="avatar" aria-hidden="true">{{ r.estudianteNombre?.[0] || 'E' }}</div>
+                <div class="student-name" [matTooltip]="r.estudianteNombre">{{ r.estudianteNombre }}</div>
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="prom">
+            <th mat-header-cell *matHeaderCellDef class="sticky">Nota Trimestral</th>
+            <td mat-cell *matCellDef="let r">
+              <mat-form-field appearance="outline" class="cell-ff dense">
+                <mat-label>0 a 10</mat-label>
+                <input
+                  matInput
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  max="10"
+                  step="0.1"
+                  [(ngModel)]="r.promedioTrimestral"
+                  (ngModelChange)="onNotaChange(r)"
+                />
+              </mat-form-field>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="cols"></tr>
+          <tr mat-row *matRowDef="let row; columns: cols" class="row"></tr>
+        </table>
+
+        <div class="table-footer">
+          <div class="pager">
+            <div class="range">Mostrando {{ pageStart()+1 }}–{{ pageEnd() }} de {{ filteredCount() }}</div>
+            <div class="pager-controls">
+              <mat-form-field appearance="outline" class="size-ff dense">
+                <mat-label>Filas</mat-label>
+                <mat-select [(ngModel)]="pageSize" (selectionChange)="onPageSizeChange()">
+                  <mat-option [value]="10">10</mat-option>
+                  <mat-option [value]="25">25</mat-option>
+                  <mat-option [value]="50">50</mat-option>
+                </mat-select>
+              </mat-form-field>
+              <button mat-icon-button (click)="firstPage()" [disabled]="pageIndex() === 0" aria-label="Primera página"><mat-icon>first_page</mat-icon></button>
+              <button mat-icon-button (click)="prevPage()" [disabled]="pageIndex() === 0" aria-label="Página anterior"><mat-icon>chevron_left</mat-icon></button>
+              <button mat-icon-button (click)="nextPage()" [disabled]="(pageIndex()+1) >= totalPages()" aria-label="Página siguiente"><mat-icon>chevron_right</mat-icon></button>
+              <button mat-icon-button (click)="lastPage()" [disabled]="(pageIndex()+1) >= totalPages()" aria-label="Última página"><mat-icon>last_page</mat-icon></button>
             </div>
           </div>
-        </div>
 
-        <div class="actions">
-          <button mat-flat-button color="primary" type="submit" [disabled]="!formOk()">
-            <mat-icon>save</mat-icon> Guardar
+          <div class="footer-actions">
+            <button mat-stroked-button class="btn-outline" (click)="recargar()">
+              <mat-icon>refresh</mat-icon>
+              Recargar
+            </button>
+            <button mat-flat-button color="primary" class="btn-primary" (click)="guardar()" [disabled]="guardando() || !rows().length">
+              <mat-icon>save</mat-icon>
+              {{ guardando() ? 'Guardando...' : 'Guardar cambios' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <ng-template #noRows>
+        <div class="empty">
+          <div class="empty-icon">📋</div>
+          <div class="empty-title">No hay estudiantes cargados</div>
+          <div class="empty-sub">Seleccione <b>Curso</b>, (si aplica) <b>Materia</b> y <b>Trimestre</b> para visualizar la tabla.</div>
+          <button mat-stroked-button class="btn-outline mt-8" (click)="recargar()">
+            <mat-icon>refresh</mat-icon>
+            Intentar de nuevo
           </button>
         </div>
-      </form>
+      </ng-template>
     </mat-card>
   </div>
   `,
   styles: [`
-    .wrap { padding: 20px; max-width: 900px; margin: 0 auto; }
-    .card { padding: 16px; border-radius: 18px; display: grid; gap: 10px; }
-    .header h2 { margin: 0; font-size: 22px; font-weight: 800; }
-    .sub { opacity: .7; }
-    .form-grid { display: grid; gap: 12px; }
-    .field { display: grid; gap: 6px; }
-    .lbl { font-size: 13px; opacity: .85; }
-    .row2 { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)); gap: 10px; }
-    .actions { display: flex; justify-content: flex-end; }
-    .badge { padding: 6px 10px; border-radius: 999px; background: #eee; text-align: center; }
-    .ok { background: #e6f5e9; }
-    .warn { background: #fdecea; }
-    @media (max-width: 720px) {
-      .row2 { grid-template-columns: 1fr 1fr; }
+    .wrap { padding: 16px; max-width: 1100px; margin: 0 auto; }
+    .card { padding: 16px; border-radius: 16px; display: grid; gap: 12px; }
+    .header { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+    .title-block .eyebrow { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; letter-spacing: .3px; opacity: .8; }
+    .title { margin: 0; font-size: 20px; font-weight: 700; }
+    .sub { margin: 0; opacity: .8; font-size: 12.5px; }
+    .actions { display: inline-flex; gap: 8px; align-items: center; }
+    .btn-primary mat-icon, .btn-outline mat-icon { margin-right: 6px; }
+    .soft-divider { opacity: .45; }
+    .filters { display: grid; grid-template-columns: repeat(4, minmax(210px, 1fr)); gap: 10px; align-items: end; }
+    .ff { width: 100%; }
+    .dense .mat-mdc-form-field-infix { padding-top: 6px !important; padding-bottom: 6px !important; }
+    .dense .mat-mdc-text-field-wrapper { --mdc-filled-text-field-container-height: 36px; }
+    .search .mat-mdc-form-field-infix { padding-right: 0; }
+    .table-wrap { margin-top: 4px; overflow: auto; border-radius: 12px; border: 1px solid #EAEAEA; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+    .modern-table th { background: #F9FAFB; font-weight: 600; color: #2f2f2f; }
+    .modern-table th, .modern-table td { padding: 6px 10px; }
+    .modern-table.compact .row { height: 36px; }
+    .modern-table .sticky { position: sticky; top: 0; z-index: 1; }
+    .modern-table .row:nth-child(odd) td { background: #FFFFFF; }
+    .modern-table .row:nth-child(even) td { background: #FBFBFD; }
+    .center { text-align: center; }
+    .muted { opacity: .7; }
+    .student-cell { display: flex; align-items: center; gap: 8px; min-width: 200px; }
+    .avatar { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #EEF2FF; font-weight: 700; font-size: 11px; }
+    .student-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cell-ff { width: 110px; }
+    .cell-ff .mat-mdc-form-field-infix { padding-top: 0 !important; padding-bottom: 0 !important; }
+    .table-footer { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; padding: 10px; border-top: 1px solid #EEE; background: #FFF; }
+    .pager { display: flex; align-items: center; gap: 10px; }
+    .range { font-size: 12px; opacity: .8; }
+    .pager-controls { display: inline-flex; align-items: center; gap: 4px; }
+    .size-ff { width: 110px; }
+    .footer-actions { display: inline-flex; gap: 8px; }
+    .empty { padding: 28px 14px; display: grid; place-items: center; text-align: center; gap: 6px; color: #555; }
+    .empty-icon { font-size: 40px; }
+    .empty-title { font-weight: 700; }
+    .mt-8 { margin-top: 8px; }
+    @media (max-width: 1200px) { .filters { grid-template-columns: repeat(3, minmax(210px, 1fr)); } }
+    @media (max-width: 900px)  { .filters { grid-template-columns: 1fr 1fr; } .student-cell { min-width: 160px; } }
+    @media (max-width: 600px)  {
+      .header { grid-template-columns: 1fr; }
+      .actions { justify-content: flex-start; }
+      .filters { grid-template-columns: 1fr; }
+      .cell-ff { width: 100px; }
+      .table-footer { grid-template-columns: 1fr; gap: 8px; }
+      .pager { justify-content: space-between; width: 100%; }
     }
   `]
 })
@@ -132,27 +241,32 @@ export class ProfesorNotasCursoComponent implements OnInit {
   private sb = inject(MatSnackBar);
   private auth = inject(AuthService);
   private cursoSrv = inject(CursoService);
+  private estuSrv = inject(EstudianteService);
   public caliSrv = inject(CalificacionService);
 
   // Estado base
   cursos = signal<any[]>([]);
+  cargando = signal<boolean>(false);
+  guardando = signal<boolean>(false);
+
+  // Selección
   cursoId = '';
   materiaId = '';
   trimestre: Trimestre = 'T1';
-  estudianteId = '';
 
-  // Campos de nota
-  promedio: number | null = null;
-  faltasJ: number = 0;
-  faltasI: number = 0;
-  cualitativa: string = 'Insuficiente';
+  // Detalle curso
+  cursoDetalle = signal<any | null>(null);
 
-  // Cache: notas existentes del trimestre para prefill rápido por estudiante
-  private notasIndex = new Map<string, { prom: number | null, fj: number, fi: number }>();
+  // Tabla
+  cols: string[] = ['n','est','prom'];
+  rows = signal<RowVM[]>([]);
 
-  // ====== Ciclo ======
+  // Búsqueda / paginación
+  q = signal<string>('');
+  pageSize = signal<number>(25);
+  pageIndex = signal<number>(0);
+
   ngOnInit(): void {
-    // Cargar cursos, filtrando solo los que tienen al profesor como responsable en alguna materia
     this.auth.ensureUserLoaded().subscribe(() => {
       const me = this.auth.getuser()?.id ?? '';
       this.cursoSrv.listar().subscribe({
@@ -162,7 +276,6 @@ export class ProfesorNotasCursoComponent implements OnInit {
             (c.materias ?? []).some((m: any) => this.asId(m?.profesor) === me)
           );
           this.cursos.set(mios);
-          // Autoseleccionar curso si hay solo uno
           if (mios.length === 1) {
             this.cursoId = this.asId(mios[0]._id);
             this.onCursoChange();
@@ -173,12 +286,28 @@ export class ProfesorNotasCursoComponent implements OnInit {
     });
   }
 
-  // ====== Derivados ======
+  // ===== Helpers de ID/OID =====
+  private validOid(id: string): boolean {
+    return /^[a-fA-F0-9]{24}$/.test(id);
+  }
+
+  asId(val: any): string {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object') {
+      // prioriza _id, pero prueba uid, id, value
+      return String(val._id ?? val.uid ?? val.id ?? val.value ?? '');
+    }
+    return String(val);
+  }
+
+  // ===== Derivados =====
   cursoSel = computed(() => (this.cursos() ?? []).find(c => this.asId(c._id) === this.cursoId));
-  estudiantesCurso = computed(() => (this.cursoSel()?.estudiantes ?? []));
+  anioLectivoId = computed(() => this.asId(this.cursoDetalle()?.anioLectivo || this.cursoSel()?.anioLectivo));
+
   materiasAsignadas = computed<MateriaAsignada[]>(() => {
     const me = this.auth.getuser()?.id ?? '';
-    const mats = (this.cursoSel()?.materias ?? [])
+    const mats = (this.cursoDetalle()?.materias ?? this.cursoSel()?.materias ?? [])
       .filter((m: any) => this.asId(m?.profesor) === me)
       .map((m: any) => ({
         materiaId: this.asId(m?.materia),
@@ -187,118 +316,187 @@ export class ProfesorNotasCursoComponent implements OnInit {
     return mats;
   });
 
-  // ====== Handlers ======
-  onCursoChange() {
-    // Si hay solo una materia asignada, autoseleccionarla y ocultar el selector
-    const mats = this.materiasAsignadas();
-    this.materiaId = mats.length === 1 ? mats[0].materiaId : '';
-    // reset alumno y campos
-    this.estudianteId = '';
-    this.resetCampos();
-    // Precargar notas del trimestre (si ya hay materia)
-    this.preloadNotasDelTrimestre();
+  // Búsqueda + paginación
+  filteredRows = computed(() => {
+    const term = (this.q() || '').trim().toLowerCase();
+    const base = this.rows();
+    if (!term) return base;
+    return base.filter(r => (r.estudianteNombre || '').toLowerCase().includes(term));
+  });
+  totalPages = computed(() => Math.max(1, Math.ceil(this.filteredRows().length / this.pageSize())));
+  pageStart = computed(() => this.pageIndex() * this.pageSize());
+  pageEnd = computed(() => Math.min(this.filteredRows().length, this.pageStart() + this.pageSize()));
+  viewRows = computed(() => this.filteredRows().slice(this.pageStart(), this.pageEnd()));
+  filteredCount = computed(() => this.filteredRows().length);
+
+  // ===== Handlers =====
+  onCursoChange(): void {
+    this.cursoDetalle.set(null);
+    this.rows.set([]);
+    this.materiaId = '';
+    this.resetPaging();
+    if (!this.cursoId) return;
+
+    this.cargando.set(true);
+    this.cursoSrv.obtener(this.cursoId).subscribe({
+      next: (res: any) => {
+        const c = res?.data ?? res ?? null;
+        this.cursoDetalle.set(c);
+
+        // Si estudiantes son IDs, enriquecemos con nombres en frontend
+        const est = (c?.estudiantes ?? []) as any[];
+        const vienenIds = est.length > 0 && typeof est[0] === 'string';
+
+        if (vienenIds) {
+          this.estuSrv.getAllMap().subscribe((mapa) => {
+            const enriquecidos = est.map((id: string) => {
+              const e: Estudiante | undefined = mapa.get(id);
+              // IMPORTANTE: guarda tanto _id como uid para que asId los encuentre
+              return e
+                ? { _id: id, uid: id, nombre: e.nombre, email: e.email }
+                : { _id: id, uid: id, nombre: id };
+            });
+
+            const reconstruido = { ...(this.cursoDetalle() ?? {}), estudiantes: enriquecidos };
+            this.cursoDetalle.set(reconstruido);
+
+            const mats = this.materiasAsignadas();
+            this.materiaId = mats.length === 1 ? mats[0].materiaId : '';
+            this.cargarTabla();
+            this.cargando.set(false);
+          });
+        } else {
+          const mats = this.materiasAsignadas();
+          this.materiaId = mats.length === 1 ? mats[0].materiaId : '';
+          this.cargarTabla();
+          this.cargando.set(false);
+        }
+      },
+      error: () => { this.cargando.set(false); this.sb.open('No se pudo cargar el detalle del curso', 'Cerrar', { duration: 3000 }); }
+    });
   }
 
-  preloadNotasDelTrimestre() {
-    this.notasIndex.clear();
-    if (!this.cursoId || !this.materiaId || !this.trimestre) return;
+  recargar(): void {
+    if (!this.cursoId) return;
+    this.onCursoChange();
+  }
 
-    // Obtener las notas del trimestre para toda la materia y armar un índice por estudiante
+  onSearchChange(): void { this.pageIndex.set(0); }
+  clearSearch(): void { this.q.set(''); this.pageIndex.set(0); }
+  onPageSizeChange(): void { this.pageIndex.set(0); }
+  prevPage(): void { if (this.pageIndex() > 0) this.pageIndex.set(this.pageIndex() - 1); }
+  nextPage(): void { if ((this.pageIndex() + 1) < this.totalPages()) this.pageIndex.set(this.pageIndex() + 1); }
+  firstPage(): void { this.pageIndex.set(0); }
+  lastPage(): void { this.pageIndex.set(this.totalPages() - 1); }
+  private resetPaging(): void { this.pageIndex.set(0); this.pageSize.set(25); this.q.set(''); }
+
+  /** Construye la tabla con estudiantes y prellena notas */
+  cargarTabla(): void {
+    this.rows.set([]);
+    this.resetPaging();
+    if (!this.cursoDetalle() || !this.trimestre) return;
+    if (this.materiasAsignadas().length > 1 && !this.materiaId) return;
+
+    const estudiantes: any[] = this.cursoDetalle()?.estudiantes ?? [];
+    const base: RowVM[] = (estudiantes ?? []).map((e: any, idx: number): RowVM => {
+      const id = this.asId(e);
+      const nombre =
+        (typeof e === 'object' && (e?.nombre || e?.fullname || e?.email)) ?
+          (e.nombre ?? e.fullname ?? e.email) :
+          (id || `Estudiante ${idx + 1}`);
+
+      return { estudianteId: id, estudianteNombre: String(nombre), promedioTrimestral: null };
+    }).sort((a: RowVM, b: RowVM) => a.estudianteNombre.localeCompare(b.estudianteNombre));
+
+    if (!base.length) { this.rows.set([]); return; }
+
+    this.cargando.set(true);
     this.caliSrv.obtenerNotas({
-      cursoId: this.cursoId,
-      anioLectivoId: this.asId(this.cursoSel()?.anioLectivo),
-      materiaId: this.materiaId,
+      cursoId: this.asId(this.cursoDetalle()?._id),
+      anioLectivoId: this.anioLectivoId(),
+      materiaId: this.materiaId || this.materiasAsignadas()[0]?.materiaId || '',
       trimestre: this.trimestre,
     }).subscribe({
       next: (res) => {
-        (res.estudiantes ?? []).forEach(e => {
-          this.notasIndex.set(e.estudianteId, {
-            prom: e.promedioTrimestral ?? null,
-            fj: e.faltasJustificadas ?? 0,
-            fi: e.faltasInjustificadas ?? 0
-          });
+        const idx = new Map<string, any>();
+        (res?.estudiantes ?? []).forEach((it: any) => idx.set(it.estudianteId, it));
+        const merged = base.map((r: RowVM): RowVM => {
+          const prev = idx.get(r.estudianteId);
+          const prom10 = typeof prev?.promedioTrimestral === 'number' ? prev.promedioTrimestral : null;
+          return { ...r, promedioTrimestral: prom10 };
         });
-        // Si ya hay estudiante seleccionado, prefill
-        this.prefillDesdeNotas();
+        this.rows.set(merged);
+        this.cargando.set(false);
       },
-      error: (e) => this.sb.open(e?.error?.message ?? 'No se pudieron obtener las notas actuales', 'Cerrar', { duration: 3500 })
+      error: () => { this.rows.set(base); this.cargando.set(false); }
     });
   }
 
-  prefillDesdeNotas() {
-    this.resetCampos();
-    if (!this.estudianteId) return;
-    const found = this.notasIndex.get(this.estudianteId);
-    if (found) {
-      this.promedio = found.prom;
-      this.faltasJ = found.fj;
-      this.faltasI = found.fi;
-      this.cualitativa = this.caliSrv.cualitativa(this.promedio ?? 0);
-    }
+  onNotaChange(r: RowVM): void {
+    if (r.promedioTrimestral == null) return;
+    const v = Number(r.promedioTrimestral);
+    if (isNaN(v)) r.promedioTrimestral = null as any;
+    else r.promedioTrimestral = Math.min(10, Math.max(0, v));
   }
 
-  guardar(f: NgForm) {
-    if (!this.formOk()) {
-      this.sb.open('Complete los campos requeridos.', 'Cerrar', { duration: 2500 });
+  guardar(): void {
+    const anioId = this.anioLectivoId();
+    const materia = this.materiaId || this.materiasAsignadas()[0]?.materiaId || '';
+    const cId = this.cursoId;
+
+    // Validaciones de IDs principales (para evitar 400)
+    if (!this.validOid(cId) || !this.validOid(anioId) || !this.validOid(materia)) {
+      console.warn('[ProfesorNotasCurso] IDs inválidos:', { cursoId: cId, anioLectivoId: anioId, materiaId: materia });
+      this.sb.open('IDs inválidos (curso / año lectivo / materia)', 'Cerrar', { duration: 3500 });
       return;
     }
 
-    // Validación rango
-    if (this.promedio != null) {
-      const n = Number(this.promedio);
-      if (isNaN(n) || n < 0 || n > 100) {
-        this.sb.open('El promedio debe estar entre 0 y 100.', 'Cerrar', { duration: 3000 });
-        return;
-      }
+    if (!this.rows().length) {
+      this.sb.open('No hay estudiantes para guardar', 'Cerrar', { duration: 2500 });
+      return;
     }
 
-    // Usamos el bulk con una sola fila
-    const payload: BulkTrimestrePayload = this.caliSrv.buildBulkPayload({
-      cursoId: this.cursoId,
-      anioLectivoId: this.asId(this.cursoSel()?.anioLectivo),
-      materiaId: this.materiaId,
+    // Valida notas 0..10
+    const invalNota = this.rows().some((r: RowVM) => {
+      const n = r.promedioTrimestral;
+      return n != null && (isNaN(Number(n)) || Number(n) < 0 || Number(n) > 10);
+    });
+    if (invalNota) {
+      this.sb.open('Cada nota debe estar entre 0 y 10.', 'Cerrar', { duration: 3000 });
+      return;
+    }
+
+    // Filtra filas con estudianteId no-OID para evitar “estudianteId inválido”
+    const filasInvalidas = this.rows().filter(r => !this.validOid(r.estudianteId));
+    if (filasInvalidas.length) {
+      console.warn('[ProfesorNotasCurso] Filas ignoradas por ID no válido:', filasInvalidas.map(f => f.estudianteNombre));
+      this.sb.open(`Se ignoraron ${filasInvalidas.length} estudiante(s) con ID inválido.`, 'Cerrar', { duration: 4000 });
+    }
+
+    const filasValidas = this.rows().filter(r => this.validOid(r.estudianteId));
+
+    if (!filasValidas.length) {
+      this.sb.open('Todos los estudiantes tienen ID inválido. Nada que guardar.', 'Cerrar', { duration: 3500 });
+      return;
+    }
+
+    const tableRows = filasValidas.map((r: RowVM) => ({
+      estudianteId: r.estudianteId,
+      promedioTrimestral: r.promedioTrimestral == null ? null : Number(r.promedioTrimestral),
+    }));
+
+    const payload: BulkTrimestrePayload10 = this.caliSrv.buildBulkPayload({
+      cursoId: cId,
+      anioLectivoId: anioId,
+      materiaId: materia,
       trimestre: this.trimestre,
-      tableRows: [
-        {
-          estudianteId: this.estudianteId,
-          promedioTrimestral: this.promedio,
-          faltasJustificadas: this.faltasJ,
-          faltasInjustificadas: this.faltasI,
-          asistenciaTotal: undefined
-        }
-      ]
+      tableRows
     });
 
+    this.guardando.set(true);
     this.caliSrv.cargarTrimestreBulk(payload).subscribe({
-      next: (r) => {
-        this.sb.open(r?.message ?? 'Nota guardada', 'Cerrar', { duration: 2500 });
-        // refrescar índice y mantener selección
-        this.preloadNotasDelTrimestre();
-      },
-      error: (e) => this.sb.open(e?.error?.message ?? 'Error al guardar la nota', 'Cerrar', { duration: 3500 }),
+      next: (r) => { this.guardando.set(false); this.sb.open(r?.message ?? 'Notas guardadas', 'Cerrar', { duration: 2500 }); this.cargarTabla(); },
+      error: (e) => { this.guardando.set(false); this.sb.open(e?.error?.message ?? 'Error al guardar', 'Cerrar', { duration: 3500 }); }
     });
-  }
-
-  // ====== Helpers ======
-  formOk(): boolean {
-    const cursoOk = !!this.cursoId;
-    const materiaOk = this.materiasAsignadas().length <= 1 ? true : !!this.materiaId;
-    const triOk = !!this.trimestre;
-    const estOk = !!this.estudianteId;
-    return cursoOk && materiaOk && triOk && estOk;
-  }
-
-  resetCampos() {
-    this.promedio = null;
-    this.faltasJ = 0;
-    this.faltasI = 0;
-    this.cualitativa = this.caliSrv.cualitativa(0);
-  }
-
-  asId(val: any): string {
-    if (!val) return '';
-    if (typeof val === 'string') return val;
-    if (typeof val === 'object' && val._id) return String(val._id);
-    return String(val);
   }
 }

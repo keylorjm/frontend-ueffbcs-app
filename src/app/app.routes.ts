@@ -63,16 +63,6 @@ export const routes: Routes = [
       },
 
       {
-        path: 'profesor-notas-trimestrales',
-        canActivate: [ProfesorGuard],
-        loadComponent: () =>
-          import('./components/notas-trimestrales/notas-trimestrales').then(
-            (m) => m.NotasTrimestralesComponent
-          ),
-        title: 'Registro de Notas',
-      },
-
-      {
         path: 'reportes',
         canActivate: [ProfesorGuard],
         loadComponent: () =>
@@ -80,6 +70,26 @@ export const routes: Routes = [
             (m) => m.ProfesorReportesComponent
           ),
         title: 'Reportes del Profesor',
+      },
+
+      {
+        path: 'resumen',
+        canActivate: [ProfesorGuard],
+        loadComponent: () =>
+          import('./components/profesor-notas-resumen/profesor-notas-resumen').then(
+            (m) => m.ProfesorNotasResumenComponent
+          ),
+        title: 'Reportes del Profesor',
+      },
+
+      {
+        path: 'asistencia',
+        canActivate: [ProfesorGuard],
+        loadComponent: () =>
+          import('./components/profesor-asistencias/profesor-asistencias').then(
+            (m) => m.ProfesorAsistencias
+          ),
+        title: 'Asistencia por Trimestre',
       },
 
       {

@@ -24,7 +24,7 @@ import { FormsModule } from '@angular/forms';
 
         <a mat-list-item routerLink="/app/resumen" routerLinkActive="active-link">
           <mat-icon matListItemIcon>grading</mat-icon>
-          <span matListItemTitle>Notas</span>
+          <span matListItemTitle>Ver Notas</span>
         </a>
 
          <a mat-list-item routerLink="/app/profesor-notas" routerLinkActive="active-link">
@@ -32,9 +32,14 @@ import { FormsModule } from '@angular/forms';
           <span matListItemTitle>Asignar Notas</span>
         </a>
 
-        <a mat-list-item routerLink="/app/asistencia" routerLinkActive="active-link">
+        <a mat-list-item routerLink="/app/ver-asistencia" routerLinkActive="active-link">
+          <mat-icon matListItemIcon>free_cancellation</mat-icon>
+          <span matListItemTitle>Ver Asistencias</span>
+        </a>
+
+        <a mat-list-item routerLink="/app/agregar-asistencia" routerLinkActive="active-link">
           <mat-icon matListItemIcon>calendar_month</mat-icon>
-          <span matListItemTitle>Asistencias</span>
+          <span matListItemTitle>Agregar Asistencias</span>
         </a>    
 
 
@@ -81,7 +86,7 @@ import { FormsModule } from '@angular/forms';
           <span matListItemTitle>Materias</span>
         </a>
 
-        <a mat-list-item routerLink="/app/boletin" routerLinkActive="active-link">
+        <a mat-list-item routerLink="/app/admin-boletin" routerLinkActive="active-link">
           <mat-icon matListItemIcon>grading</mat-icon>
           <span matListItemTitle>Boletines</span>
         </a>

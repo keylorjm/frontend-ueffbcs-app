@@ -11,7 +11,11 @@ export interface FaltasRow {
   faltasJustificadas: number;     // >= 0
   faltasInjustificadas: number;   // >= 0
 }
-
+export interface AsistenciaResumen {
+  faltasJustificadas: number;
+  faltasInjustificadas: number;
+  diasLaborables: number;
+}
 export interface GuardarFaltasBulkPayload {
   cursoId: string;
   anioLectivoId: string;
@@ -63,4 +67,20 @@ export class AsistenciaService {
   guardarFaltasBulk(payload: GuardarFaltasBulkPayload) {
     return this.http.post<any>(`${this.baseUrl}/bulk-faltas`, payload);
   }
+
+  getResumenTrimestre(params: {
+    cursoId: string;
+    anioLectivoId: string;
+    estudianteId: string;
+    trimestre: Trimestre;
+  }): Observable<AsistenciaResumen> {
+    let p = new HttpParams()
+      .set('cursoId', params.cursoId)
+      .set('anioLectivoId', params.anioLectivoId)
+      .set('estudianteId', params.estudianteId)
+      .set('trimestre', params.trimestre);
+
+    return this.http.get<AsistenciaResumen>(`${this.baseUrl}/resumen`, { params: p });
+  }
+
 }

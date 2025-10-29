@@ -63,16 +63,6 @@ export const routes: Routes = [
       },
 
       {
-        path: 'reportes',
-        canActivate: [ProfesorGuard],
-        loadComponent: () =>
-          import('./components/profesor-reportes/profesor-reportes').then(
-            (m) => m.ProfesorReportesComponent
-          ),
-        title: 'Reportes del Profesor',
-      },
-
-      {
         path: 'resumen',
         canActivate: [ProfesorGuard],
         loadComponent: () =>
@@ -83,13 +73,33 @@ export const routes: Routes = [
       },
 
       {
-        path: 'asistencia',
+        path: 'agregar-asistencia',
         canActivate: [ProfesorGuard],
         loadComponent: () =>
           import('./components/profesor-asistencias/profesor-asistencias').then(
             (m) => m.ProfesorAsistenciasCursoComponent
           ),
         title: 'Asistencia por Trimestre',
+      },
+
+      {
+        path: 'ver-asistencia',
+        canActivate: [ProfesorGuard],
+        loadComponent: () =>
+          import('./components/profesor-asistencias-resumen/profesor-asistencias-resumen').then(
+            (m) => m.ProfesorAsistenciasResumenComponent
+          ),
+        title: 'Asistencia por Trimestre',
+      },
+
+      {
+        path: 'reporte',
+        canActivate: [ProfesorGuard],
+        loadComponent: () =>
+          import('./components/reporte-estudiante/reporte-estudiante').then(
+            (m) => m.ReporteEstudianteComponent
+          ),
+        title: 'Reporte por Estudiante',
       },
 
       {
@@ -124,6 +134,14 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./components/materias/materias').then((m) => m.MateriasComponent),
         title: 'Gestión de Materias',
+      },
+
+      {
+        path: 'admin-boletin',
+        canActivate: [AdminGuard],
+        loadComponent: () =>
+          import('./components/reporte-curso/reporte-curso').then((m) => m.ReporteCursoComponent),
+        title: 'Gestión de Estudiantes',
       },
 
       { path: '**', redirectTo: 'mis-cursos' },

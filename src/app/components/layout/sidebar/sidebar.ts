@@ -23,17 +23,17 @@ import { FormsModule } from '@angular/forms';
         </a>
 
         <a mat-list-item routerLink="/app/resumen" routerLinkActive="active-link">
-          <mat-icon matListItemIcon>rubric</mat-icon>
+          <mat-icon matListItemIcon>grading</mat-icon>
           <span matListItemTitle>Notas</span>
         </a>
 
          <a mat-list-item routerLink="/app/profesor-notas" routerLinkActive="active-link">
-          <mat-icon matListItemIcon>grading</mat-icon>
+          <mat-icon matListItemIcon>edit_square</mat-icon>
           <span matListItemTitle>Asignar Notas</span>
         </a>
 
         <a mat-list-item routerLink="/app/asistencia" routerLinkActive="active-link">
-          <mat-icon matListItemIcon>edit_square</mat-icon>
+          <mat-icon matListItemIcon>calendar_month</mat-icon>
           <span matListItemTitle>Asistencias</span>
         </a>    
 

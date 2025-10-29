@@ -87,7 +87,7 @@ export const routes: Routes = [
         canActivate: [ProfesorGuard],
         loadComponent: () =>
           import('./components/profesor-asistencias/profesor-asistencias').then(
-            (m) => m.ProfesorAsistencias
+            (m) => m.ProfesorAsistenciasCursoComponent
           ),
         title: 'Asistencia por Trimestre',
       },

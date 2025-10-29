@@ -18,17 +18,15 @@ import { MatChipsModule } from '@angular/material/chips';
 
 import { AuthService } from '../../services/auth.service';
 import { CursoService } from '../../services/curso.service';
-import { AsistenciaService, Trimestre } from '../../services/asistencia.service';
+import { AsistenciaService, Trimestre, GuardarFaltasBulkPayload } from '../../services/asistencia.service';
 
 type MateriaAsignada = { materiaId: string; materiaNombre: string };
 
 type RowVM = {
   estudianteId: string;
   estudianteNombre: string;
-  faltasJustificadas: number;
-  faltasInjustificadas: number;
-  diasLaborados: number;        // editable por fila si lo deseas (dejamos visible)
-  asistidos: number;            // derivado = diasLaborados - faltasInjustificadas
+  fj: number; // faltas justificadas
+  fi: number; // faltas injustificadas
 };
 
 @Component({
@@ -36,27 +34,25 @@ type RowVM = {
   selector: 'app-profesor-asistencias-curso',
   imports: [
     CommonModule, FormsModule,
-    MatCardModule, MatSelectModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatSnackBarModule,
-    MatIconModule, MatDividerModule, MatTableModule, MatProgressBarModule, MatTooltipModule, MatChipsModule
+    MatCardModule, MatSelectModule, MatFormFieldModule, MatInputModule, MatButtonModule,
+    MatSnackBarModule, MatIconModule, MatDividerModule, MatTableModule,
+    MatProgressBarModule, MatTooltipModule, MatChipsModule
   ],
   template: `
   <div class="wrap">
     <mat-card class="card">
-      <!-- Header -->
       <div class="header">
         <div class="title-block">
-          <div class="eyebrow"><mat-icon>event_busy</mat-icon> Registro de asistencias</div>
+          <div class="eyebrow"><mat-icon>assignment_turned_in</mat-icon> Registro de asistencias</div>
           <h2 class="title">Faltas por Curso (Trimestrales)</h2>
-          <p class="sub">Ingrese <b>faltas justificadas</b> e <b>injustificadas</b>. Defina los <b>días laborados</b> del trimestre.</p>
+          <p class="sub">Ingrese <b>Días Laborables</b> del trimestre y las <b>Faltas</b> por estudiante.</p>
         </div>
         <div class="actions">
-          <button mat-stroked-button class="btn-outline" (click)="recargar()" matTooltip="Volver a cargar datos del curso">
-            <mat-icon>refresh</mat-icon>
-            <span>Recargar</span>
+          <button mat-stroked-button (click)="recargar()" [disabled]="cargando()">
+            <mat-icon>refresh</mat-icon> Recargar
           </button>
-          <button mat-flat-button color="primary" class="btn-primary" (click)="guardar()" [disabled]="guardando() || !rows().length">
-            <mat-icon>save</mat-icon>
-            <span>{{ guardando() ? 'Guardando...' : 'Guardar' }}</span>
+          <button mat-flat-button color="primary" (click)="guardar()" [disabled]="guardando() || !rows().length">
+            <mat-icon>save</mat-icon> {{ guardando() ? 'Guardando…' : 'Guardar' }}
           </button>
         </div>
       </div>
@@ -88,30 +84,28 @@ type RowVM = {
           </mat-select>
         </mat-form-field>
 
-        <div class="dl-panel">
-          <div class="chipline">
-            <mat-chip-set>
-              <mat-chip appearance="outlined" color="primary">Trimestre: {{ trimestre }}</mat-chip>
-              <mat-chip appearance="outlined">Estudiantes: {{ rows().length }}</mat-chip>
-            </mat-chip-set>
-          </div>
-          <div class="dl-fields">
-            <mat-form-field appearance="outline" class="ff small dense">
-              <mat-label>Días laborados (global)</mat-label>
-              <input matInput type="number" min="0" [(ngModel)]="diasLaboradosGlobal" (ngModelChange)="aplicarDiasLaboradosGlobal(false)" />
-            </mat-form-field>
-            <button mat-stroked-button (click)="aplicarDiasLaboradosGlobal(true)" matTooltip="Aplicar el valor global a todas las filas">
-              <mat-icon>done_all</mat-icon> Aplicar a todos
-            </button>
-          </div>
+        <mat-form-field appearance="outline" class="ff dense">
+          <mat-label>Días laborables del trimestre</mat-label>
+          <input matInput type="number" min="0" [(ngModel)]="diasLaborables" name="diasLaborables" placeholder="Ej: 45" />
+        </mat-form-field>
+
+        <div class="ids" *ngIf="showIds && cursoDetalle()">
+          <mat-chip-set>
+            <mat-chip appearance="outlined" color="primary">cursoId={{cursoId}}</mat-chip>
+            <mat-chip appearance="outlined">anioId={{ anioLectivoId() }}</mat-chip>
+            <mat-chip appearance="outlined">materiaId={{ materiaId || materiasAsignadas()[0]?.materiaId }}</mat-chip>
+          </mat-chip-set>
         </div>
+        <button mat-button class="toggle" (click)="showIds = !showIds">
+          <mat-icon>bug_report</mat-icon> {{ showIds ? 'Ocultar IDs' : 'Ver IDs' }}
+        </button>
       </div>
 
       <mat-progress-bar *ngIf="cargando()" mode="indeterminate"></mat-progress-bar>
 
       <!-- Tabla -->
       <div class="table-wrap" *ngIf="rows().length; else noRows">
-        <table mat-table [dataSource]="rows()" class="modern-table compact mat-elevation-z1" aria-label="Tabla de asistencias">
+        <table mat-table [dataSource]="rows()" class="modern-table compact mat-elevation-z1">
           <!-- # -->
           <ng-container matColumnDef="n">
             <th mat-header-cell *matHeaderCellDef class="sticky center">#</th>
@@ -123,41 +117,29 @@ type RowVM = {
             <th mat-header-cell *matHeaderCellDef class="sticky">Estudiante</th>
             <td mat-cell *matCellDef="let r">
               <div class="student-cell">
-                <div class="avatar" aria-hidden="true">{{ r.estudianteNombre?.[0] || 'E' }}</div>
+                <div class="avatar">{{ r.estudianteNombre?.[0] || 'E' }}</div>
                 <div class="student-name" [matTooltip]="r.estudianteNombre">{{ r.estudianteNombre }}</div>
               </div>
             </td>
           </ng-container>
 
-          <!-- Faltas Justificadas -->
+          <!-- FJ -->
           <ng-container matColumnDef="fj">
-            <th mat-header-cell *matHeaderCellDef class="sticky center">Faltas J.</th>
+            <th mat-header-cell *matHeaderCellDef class="sticky center">FJ</th>
             <td mat-cell *matCellDef="let r" class="center">
-              <input class="inp" type="number" min="0" [(ngModel)]="r.faltasJustificadas" (ngModelChange)="recalcRow(r)" />
+              <mat-form-field appearance="outline" class="cell-ff dense">
+                <input matInput type="number" min="0" [(ngModel)]="r.fj" (ngModelChange)="clampNonNeg(r, 'fj')" />
+              </mat-form-field>
             </td>
           </ng-container>
 
-          <!-- Faltas Injustificadas -->
+          <!-- FI -->
           <ng-container matColumnDef="fi">
-            <th mat-header-cell *matHeaderCellDef class="sticky center">Faltas I.</th>
+            <th mat-header-cell *matHeaderCellDef class="sticky center">FI</th>
             <td mat-cell *matCellDef="let r" class="center">
-              <input class="inp" type="number" min="0" [(ngModel)]="r.faltasInjustificadas" (ngModelChange)="recalcRow(r)" />
-            </td>
-          </ng-container>
-
-          <!-- Días laborados (por fila, opcionalmente editable) -->
-          <ng-container matColumnDef="dl">
-            <th mat-header-cell *matHeaderCellDef class="sticky center">Laborados</th>
-            <td mat-cell *matCellDef="let r" class="center">
-              <input class="inp" type="number" min="0" [(ngModel)]="r.diasLaborados" (ngModelChange)="recalcRow(r)" />
-            </td>
-          </ng-container>
-
-          <!-- Asistidos (derivado) -->
-          <ng-container matColumnDef="asis">
-            <th mat-header-cell *matHeaderCellDef class="sticky center">Asistidos</th>
-            <td mat-cell *matCellDef="let r" class="center">
-              <span class="badge">{{ r.asistidos }}</span>
+              <mat-form-field appearance="outline" class="cell-ff dense">
+                <input matInput type="number" min="0" [(ngModel)]="r.fi" (ngModelChange)="clampNonNeg(r, 'fi')" />
+              </mat-form-field>
             </td>
           </ng-container>
 
@@ -166,26 +148,16 @@ type RowVM = {
         </table>
 
         <div class="footer-actions">
-          <button mat-stroked-button class="btn-outline" (click)="recargar()">
-            <mat-icon>refresh</mat-icon>
-            Recargar
-          </button>
-          <button mat-flat-button color="primary" class="btn-primary" (click)="guardar()" [disabled]="guardando() || !rows().length">
-            <mat-icon>save</mat-icon>
-            {{ guardando() ? 'Guardando...' : 'Guardar' }}
-          </button>
+          <button mat-stroked-button (click)="recargar()"><mat-icon>refresh</mat-icon> Recargar</button>
+          <button mat-flat-button color="primary" (click)="guardar()" [disabled]="guardando()"><mat-icon>save</mat-icon> Guardar</button>
         </div>
       </div>
 
       <ng-template #noRows>
         <div class="empty">
-          <div class="empty-icon">🗂️</div>
+          <div class="empty-icon">📋</div>
           <div class="empty-title">No hay estudiantes cargados</div>
-          <div class="empty-sub">Seleccione <b>Curso</b>, (si aplica) <b>Materia</b> y <b>Trimestre</b> para visualizar la tabla.</div>
-          <button mat-stroked-button class="btn-outline mt-8" (click)="recargar()">
-            <mat-icon>refresh</mat-icon>
-            Intentar de nuevo
-          </button>
+          <div class="empty-sub">Seleccione <b>Curso</b>, (si aplica) <b>Materia</b> y <b>Trimestre</b>.</div>
         </div>
       </ng-template>
     </mat-card>
@@ -194,82 +166,66 @@ type RowVM = {
   styles: [`
     .wrap { padding: 16px; max-width: 1100px; margin: 0 auto; }
     .card { padding: 16px; border-radius: 16px; display: grid; gap: 12px; }
-
     .header { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
-    .title-block .eyebrow { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; letter-spacing: .3px; opacity: .8; }
+    .eyebrow { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; opacity: .8; }
     .title { margin: 0; font-size: 20px; font-weight: 700; }
     .sub { margin: 0; opacity: .8; font-size: 12.5px; }
     .actions { display: inline-flex; gap: 8px; align-items: center; }
-    .btn-primary mat-icon, .btn-outline mat-icon { margin-right: 6px; }
     .soft-divider { opacity: .45; }
 
-    .filters { display: grid; grid-template-columns: repeat(3, minmax(210px, 1fr)); gap: 10px; align-items: end; }
+    .filters { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 10px; align-items: end; }
     .ff { width: 100%; }
     .dense .mat-mdc-form-field-infix { padding-top: 6px !important; padding-bottom: 6px !important; }
-    .dense .mat-mdc-text-field-wrapper { --mdc-filled-text-field-container-height: 36px; }
-
-    .dl-panel { grid-column: 1 / -1; border: 1px solid #eee; border-radius: 12px; padding: 10px; background: #fafafa; display: grid; gap: 8px; }
-    .chipline { display: flex; justify-content: space-between; align-items: center; }
-    .dl-fields { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    .small { max-width: 220px; }
+    .ids { grid-column: 1/-1; }
+    .toggle { justify-self: start; margin-top: -6px; }
 
     .table-wrap { margin-top: 4px; overflow: auto; border-radius: 12px; border: 1px solid #EAEAEA; }
-    table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+    table { width: 100%; font-size: 13px; }
     .modern-table th { background: #F9FAFB; font-weight: 600; color: #2f2f2f; }
     .modern-table th, .modern-table td { padding: 6px 10px; }
-    .modern-table.compact .row { height: 36px; }
-    .modern-table .sticky { position: sticky; top: 0; z-index: 1; }
-    .modern-table .row:nth-child(odd) td { background: #FFFFFF; }
-    .modern-table .row:nth-child(even) td { background: #FBFBFD; }
     .center { text-align: center; }
-
     .muted { opacity: .7; }
     .student-cell { display: flex; align-items: center; gap: 8px; min-width: 200px; }
     .avatar { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #EEF2FF; font-weight: 700; font-size: 11px; }
-    .student-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    .inp { width: 110px; padding: 6px; border: 1px solid #ddd; border-radius: 8px; }
-    .badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #eee; }
+    .cell-ff { width: 100px; }
+    .cell-ff .mat-mdc-form-field-infix { padding-top: 0 !important; padding-bottom: 0 !important; }
 
-    .footer-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 10px; border-top: 1px solid #EEE; background: #FFF; }
-
-    .empty { padding: 28px 14px; display: grid; place-items: center; text-align: center; gap: 6px; color: #555; }
+    .footer-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 10px; }
+    .empty { padding: 28px 14px; text-align: center; color: #555; }
     .empty-icon { font-size: 40px; }
     .empty-title { font-weight: 700; }
-    .mt-8 { margin-top: 8px; }
 
-    @media (max-width: 1000px) { .filters { grid-template-columns: repeat(2, minmax(210px, 1fr)); } }
-    @media (max-width: 700px) { .filters { grid-template-columns: 1fr; } .student-cell { min-width: 160px; } }
+    @media (max-width: 1200px) { .filters { grid-template-columns: repeat(3, minmax(220px, 1fr)); } }
+    @media (max-width: 900px)  { .filters { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 600px)  { .filters { grid-template-columns: 1fr; } .cell-ff { width: 90px; } }
   `]
 })
-export class ProfesorAsistencias implements OnInit {
+export class ProfesorAsistenciasCursoComponent implements OnInit {
   private sb = inject(MatSnackBar);
   private auth = inject(AuthService);
   private cursoSrv = inject(CursoService);
-  private asistSrv = inject(AsistenciaService);
+  private asisSrv = inject(AsistenciaService);
 
   // Estado base
   cursos = signal<any[]>([]);
-  cargando = signal<boolean>(false);
-  guardando = signal<boolean>(false);
-
-  // Selección
   cursoId = '';
   materiaId = '';
   trimestre: Trimestre = 'T1';
-
-  // Detalle del curso
   cursoDetalle = signal<any | null>(null);
 
+  // UI
+  cargando = signal<boolean>(false);
+  guardando = signal<boolean>(false);
+  showIds = false;
+
   // Tabla
-  cols = ['n','est','fj','fi','dl','asis'];
+  cols: string[] = ['n','est','fj','fi'];
   rows = signal<RowVM[]>([]);
+  diasLaborables: number | null = null;
 
-  // Días laborados (global del trimestre para este curso+materia)
-  diasLaboradosGlobal = 0;
-
+  // ===== Ciclo =====
   ngOnInit(): void {
-    // Cargar cursos del profesor (solo donde es responsable de alguna materia)
     this.auth.ensureUserLoaded().subscribe(() => {
       const me = this.auth.getuser()?.id ?? '';
       this.cursoSrv.listar().subscribe({
@@ -289,26 +245,26 @@ export class ProfesorAsistencias implements OnInit {
     });
   }
 
-  // Derivados
+  // ===== Derivados =====
   cursoSel = computed(() => (this.cursos() ?? []).find(c => this.asId(c._id) === this.cursoId));
   anioLectivoId = computed(() => this.asId(this.cursoDetalle()?.anioLectivo || this.cursoSel()?.anioLectivo));
 
   materiasAsignadas = computed<MateriaAsignada[]>(() => {
     const me = this.auth.getuser()?.id ?? '';
-    const mats = (this.cursoDetalle()?.materias ?? this.cursoSel()?.materias ?? [])
+    return (this.cursoDetalle()?.materias ?? this.cursoSel()?.materias ?? [])
       .filter((m: any) => this.asId(m?.profesor) === me)
       .map((m: any) => ({
         materiaId: this.asId(m?.materia),
         materiaNombre: m?.materia?.nombre ?? m?.materia ?? '—'
       }));
-    return mats;
   });
 
-  // Handlers
+  // ===== Eventos =====
   onCursoChange(): void {
     this.cursoDetalle.set(null);
     this.rows.set([]);
     this.materiaId = '';
+    this.diasLaborables = null;
     if (!this.cursoId) return;
 
     this.cargando.set(true);
@@ -316,7 +272,6 @@ export class ProfesorAsistencias implements OnInit {
       next: (res: any) => {
         const c = res?.data ?? res ?? null;
         this.cursoDetalle.set(c);
-        // Autoseleccionar materia si solo tiene una asignada
         const mats = this.materiasAsignadas();
         this.materiaId = mats.length === 1 ? mats[0].materiaId : '';
         this.cargarTabla();
@@ -331,87 +286,73 @@ export class ProfesorAsistencias implements OnInit {
     this.onCursoChange();
   }
 
+  // ===== Carga de tabla y prefills =====
   cargarTabla(): void {
     this.rows.set([]);
-    this.diasLaboradosGlobal = 0;
-
+    this.diasLaborables = null;
     if (!this.cursoDetalle() || !this.trimestre) return;
     if (this.materiasAsignadas().length > 1 && !this.materiaId) return;
 
-    // base con estudiantes
-    const estudiantes = this.cursoDetalle()?.estudiantes ?? [];
-    const base: RowVM[] = (estudiantes ?? []).map((e: any) => ({
-      estudianteId: this.asId(e),
-      estudianteNombre: e?.nombre ?? e?.fullname ?? e?.email ?? '—',
-      faltasJustificadas: 0,
-      faltasInjustificadas: 0,
-      diasLaborados: 0,
-      asistidos: 0,
-    })).sort((a: { estudianteNombre: string; }, b: { estudianteNombre: any; }) => a.estudianteNombre.localeCompare(b.estudianteNombre));
+    const estudiantes: any[] = this.cursoDetalle()?.estudiantes ?? [];
+    const base: RowVM[] = (estudiantes ?? [])
+      .map((e: any): RowVM => ({
+        estudianteId: this.pickId(e),
+        estudianteNombre: this.pickName(e),
+        fj: 0,
+        fi: 0
+      }))
+      .sort((a: RowVM, b: RowVM) => a.estudianteNombre.localeCompare(b.estudianteNombre));
 
     if (!base.length) { this.rows.set([]); return; }
 
-    // Prefill desde backend
-    this.cargando.set(true);
-    this.asistSrv.obtenerAsistencias({
-      cursoId: this.asId(this.cursoDetalle()?._id),
-      anioLectivoId: this.anioLectivoId(),
-      materiaId: this.materiaId || this.materiasAsignadas()[0]?.materiaId || '',
-      trimestre: this.trimestre,
-    }).subscribe({
-      next: (res) => {
-        const idx = new Map<string, any>();
-        (res?.estudiantes ?? []).forEach((it: any) => idx.set(it.estudianteId, it));
-        let dlGlobalDetect = 0;
-
-        const merged = base.map(r => {
-          const prev = idx.get(r.estudianteId);
-          const fj = Number(prev?.faltasJustificadas ?? 0);
-          const fi = Number(prev?.faltasInjustificadas ?? 0);
-          const dl = Number(prev?.diasLaborados ?? 0);
-          dlGlobalDetect = Math.max(dlGlobalDetect, dl); // heurística simple para prellenar el global
-
-          return {
-            ...r,
-            faltasJustificadas: fj,
-            faltasInjustificadas: fi,
-            diasLaborados: dl,
-            asistidos: Math.max(0, dl - fi),
-          };
-        });
-
-        this.rows.set(merged);
-        this.diasLaboradosGlobal = dlGlobalDetect; // sugerimos el mayor detectado como “global”
-        this.cargando.set(false);
-      },
-      error: () => { this.rows.set(base); this.cargando.set(false); }
-    });
-  }
-
-  aplicarDiasLaboradosGlobal(aplicarATodos: boolean) {
-    const dl = Math.max(0, Number(this.diasLaboradosGlobal || 0));
-    if (!aplicarATodos) return; // solo si presiona el botón
-    this.rows.update(rows => rows.map(r => ({
-      ...r,
-      diasLaborados: dl,
-      asistidos: Math.max(0, dl - Number(r.faltasInjustificadas || 0)),
-    })));
-  }
-
-  recalcRow(r: RowVM) {
-    const fi = Math.max(0, Number(r.faltasInjustificadas || 0));
-    const dl = Math.max(0, Number(r.diasLaborados || 0));
-    r.faltasJustificadas = Math.max(0, Number(r.faltasJustificadas || 0));
-    r.faltasInjustificadas = fi;
-    r.diasLaborados = dl;
-    r.asistidos = Math.max(0, dl - fi);
-  }
-
-  guardar(): void {
+    const cursoId = this.asId(this.cursoDetalle()?._id);
     const anioId = this.anioLectivoId();
-    const materia = this.materiaId || this.materiasAsignadas()[0]?.materiaId || '';
+    const materiaId = this.materiaId || this.materiasAsignadas()[0]?.materiaId || '';
 
-    if (!this.cursoId || !anioId || !materia || !this.trimestre) {
+    if (!cursoId || !anioId || !materiaId) {
+      this.rows.set(base);
+      this.sb.open('IDs incompletos (curso/año/materia).', 'Cerrar', { duration: 2500 });
+      return;
+    }
+
+    this.cargando.set(true);
+
+    // 1) Días laborables
+    this.asisSrv.getDiasLaborables({ cursoId, anioLectivoId: anioId, materiaId, trimestre: this.trimestre })
+      .subscribe({
+        next: (d) => this.diasLaborables = (typeof d?.diasLaborables === 'number') ? d.diasLaborables : null,
+        error: () => this.diasLaborables = null
+      });
+
+    // 2) Faltas existentes
+    this.asisSrv.obtenerFaltas({ cursoId, anioLectivoId: anioId, materiaId, trimestre: this.trimestre })
+      .subscribe({
+        next: (res) => {
+          const idx = new Map<string, { fj: number; fi: number }>();
+          for (const it of (res?.estudiantes ?? [])) {
+            const sid = this.pickId(it?.estudianteId);
+            const fj = Number(it?.faltasJustificadas ?? 0) || 0;
+            const fi = Number(it?.faltasInjustificadas ?? 0) || 0;
+            if (sid) idx.set(sid, { fj, fi });
+          }
+          const merged = base.map((r: RowVM) => {
+            const prev = idx.get(r.estudianteId);
+            return { ...r, fj: prev?.fj ?? 0, fi: prev?.fi ?? 0 };
+          });
+          this.rows.set(merged);
+          this.cargando.set(false);
+        },
+        error: () => { this.rows.set(base); this.cargando.set(false); }
+      });
+  }
+
+  // ===== Guardar =====
+  guardar(): void {
+    const cursoId = this.asId(this.cursoDetalle()?._id);
+    const anioId = this.anioLectivoId();
+    const materiaId = this.materiaId || this.materiasAsignadas()[0]?.materiaId || '';
+
+    if (!cursoId || !anioId || !materiaId || !this.trimestre) {
       this.sb.open('Faltan datos: curso, materia o trimestre', 'Cerrar', { duration: 3000 });
       return;
     }
@@ -419,46 +360,85 @@ export class ProfesorAsistencias implements OnInit {
       this.sb.open('No hay estudiantes para guardar', 'Cerrar', { duration: 2500 });
       return;
     }
-
-    // Validaciones básicas
-    const invalid = this.rows().some(r =>
-      Number(r.faltasJustificadas ?? 0) < 0 ||
-      Number(r.faltasInjustificadas ?? 0) < 0 ||
-      Number(r.diasLaborados ?? 0) < 0
-    );
-    if (invalid) {
-      this.sb.open('Los valores no pueden ser negativos.', 'Cerrar', { duration: 3000 });
+    if (this.diasLaborables == null || this.diasLaborables < 0) {
+      this.sb.open('Ingrese días laborables (>= 0).', 'Cerrar', { duration: 3000 });
       return;
     }
 
-    // Construir payload
-    const tableRows = this.rows().map(r => ({
-      estudianteId: r.estudianteId,
-      faltasJustificadas: Number(r.faltasJustificadas ?? 0),
-      faltasInjustificadas: Number(r.faltasInjustificadas ?? 0),
-      diasLaborados: Number(r.diasLaborados ?? 0),
-    }));
+    // Sanitizar faltas (>= 0)
+    for (const r of this.rows()) {
+      r.fj = Math.max(0, Number(r.fj) || 0);
+      r.fi = Math.max(0, Number(r.fi) || 0);
+    }
 
-    const payload = this.asistSrv.buildBulkPayload({
-      cursoId: this.cursoId,
-      anioLectivoId: anioId,
-      materiaId: materia,
-      trimestre: this.trimestre,
-      tableRows
-    });
+    const payload: GuardarFaltasBulkPayload = {
+      cursoId, anioLectivoId: anioId, materiaId, trimestre: this.trimestre,
+      rows: this.rows().map((r: RowVM) => ({
+        estudianteId: r.estudianteId,
+        faltasJustificadas: r.fj,
+        faltasInjustificadas: r.fi
+      }))
+    };
 
     this.guardando.set(true);
-    this.asistSrv.cargarAsistenciaBulk(payload).subscribe({
-      next: (r) => { this.guardando.set(false); this.sb.open(r?.message ?? 'Asistencias guardadas', 'Cerrar', { duration: 2500 }); this.cargarTabla(); },
-      error: (e) => { this.guardando.set(false); this.sb.open(e?.error?.message ?? 'Error al guardar', 'Cerrar', { duration: 3500 }); }
+
+    // Secuencia: set laborables -> guardar faltas
+    this.asisSrv.setDiasLaborables({
+      cursoId, anioLectivoId: anioId, materiaId, trimestre: this.trimestre,
+      diasLaborables: Number(this.diasLaborables)
+    }).subscribe({
+      next: () => {
+        this.asisSrv.guardarFaltasBulk(payload).subscribe({
+          next: (r) => {
+            this.guardando.set(false);
+            this.sb.open(r?.message ?? 'Asistencias guardadas', 'Cerrar', { duration: 2500 });
+            this.cargarTabla();
+          },
+          error: (e) => {
+            this.guardando.set(false);
+            this.sb.open(e?.error?.message ?? 'Error al guardar faltas', 'Cerrar', { duration: 3500 });
+          }
+        });
+      },
+      error: (e) => {
+        this.guardando.set(false);
+        this.sb.open(e?.error?.message ?? 'Error al guardar días laborables', 'Cerrar', { duration: 3500 });
+      }
     });
   }
 
-  // Helpers (público porque lo usa el template)
+  // ===== Helpers =====
+  clampNonNeg(r: RowVM, field: 'fj' | 'fi') {
+    const v = Number(r[field]);
+    r[field] = isNaN(v) ? 0 : Math.max(0, v);
+  }
+
   asId(val: any): string {
     if (!val) return '';
     if (typeof val === 'string') return val;
-    if (typeof val === 'object' && val._id) return String(val._id);
+    if (typeof val === 'object' && (val as any)._id) return String((val as any)._id);
     return String(val);
+  }
+
+  private pickId(val: any): string {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object') {
+      if (val._id || val.id || val.uid) return String(val._id ?? val.id ?? val.uid);
+      const nested = val.estudiante ?? val.alumno ?? val.usuario ?? val.user ?? val.persona;
+      if (nested) return this.pickId(nested);
+    }
+    return '';
+  }
+
+  private pickName(val: any): string {
+    if (!val) return '—';
+    if (typeof val === 'string') return val;
+    const tryName = (o: any) => o?.nombre ?? o?.fullname ?? o?.email ?? null;
+    let n = tryName(val);
+    if (n) return String(n);
+    const nested = val.estudiante ?? val.alumno ?? val.usuario ?? val.user ?? val.persona;
+    n = tryName(nested);
+    return n ? String(n) : '—';
   }
 }

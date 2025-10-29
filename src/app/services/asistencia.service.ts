@@ -2,36 +2,22 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '../environments/environment';
+import { Observable } from 'rxjs';
 
-// Reusa el mismo tipo de Trimestre que en CalificacionService
 export type Trimestre = 'T1' | 'T2' | 'T3';
 
-/** Fila de entrada para BULK de asistencias */
-export interface AsistenciaInputRow {
+export interface FaltasRow {
   estudianteId: string;
-  faltasJustificadas?: number;   // >= 0
-  faltasInjustificadas?: number; // >= 0
-  diasLaborados?: number;        // >= 0 (valor informativo por estudiante; el backend lo guarda por comodidad)
+  faltasJustificadas: number;     // >= 0
+  faltasInjustificadas: number;   // >= 0
 }
 
-/** Payload para POST /api/asistencias/bulk-trimestre */
-export interface BulkAsistenciaPayload {
+export interface GuardarFaltasBulkPayload {
   cursoId: string;
   anioLectivoId: string;
   materiaId: string;
   trimestre: Trimestre;
-  rows: AsistenciaInputRow[];
-}
-
-/** Respuesta típica del GET /api/asistencias */
-export interface AsistenciaGetResponse {
-  estudiantes: Array<{
-    estudianteId: string;
-    estudianteNombre?: string;
-    faltasJustificadas?: number;
-    faltasInjustificadas?: number;
-    diasLaborados?: number;
-  }>;
+  rows: FaltasRow[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -39,65 +25,42 @@ export class AsistenciaService {
   private http = inject(HttpClient);
   private baseUrl = `${environment.apiUrl}/asistencias`;
 
-  /**
-   * Obtiene las asistencias del trimestre para (curso, año lectivo, materia).
-   * GET /api/asistencias?cursoId=&anioLectivoId=&materiaId=&trimestre=
-   */
-  obtenerAsistencias(params: {
-    cursoId: string;
-    anioLectivoId: string;
-    materiaId: string;
-    trimestre: Trimestre;
-  }) {
+  /** Obtiene los días laborables configurados para un curso/materia/trimestre */
+  getDiasLaborables(params: {
+    cursoId: string; anioLectivoId: string; materiaId: string; trimestre: Trimestre;
+  }): Observable<{ diasLaborables: number | null }> {
     let p = new HttpParams()
       .set('cursoId', params.cursoId)
       .set('anioLectivoId', params.anioLectivoId)
       .set('materiaId', params.materiaId)
       .set('trimestre', params.trimestre);
-
-    return this.http.get<AsistenciaGetResponse>(this.baseUrl, { params: p });
+    return this.http.get<{ diasLaborables: number | null }>(`${this.baseUrl}/laborables`, { params: p });
   }
 
-  /**
-   * Guarda asistencias en bloque para un trimestre.
-   * POST /api/asistencias/bulk-trimestre
-   */
-  cargarAsistenciaBulk(payload: BulkAsistenciaPayload) {
-    return this.http.post<any>(`${this.baseUrl}/bulk-trimestre`, payload);
+  /** Establece/actualiza los días laborables para un curso/materia/trimestre */
+  setDiasLaborables(payload: {
+    cursoId: string; anioLectivoId: string; materiaId: string; trimestre: Trimestre; diasLaborables: number;
+  }) {
+    return this.http.post<any>(`${this.baseUrl}/laborables`, payload);
   }
 
-  /**
-   * Helper para construir el payload a partir de filas de UI.
-   * Limpia NaN, fuerza mínimos a 0 y deja undefined los campos no enviados.
-   */
-  buildBulkPayload(input: {
-    cursoId: string;
-    anioLectivoId: string;
-    materiaId: string;
-    trimestre: Trimestre;
-    tableRows: Array<{
-      estudianteId: string;
-      faltasJustificadas?: number | null;
-      faltasInjustificadas?: number | null;
-      diasLaborados?: number | null;
-    }>;
-  }): BulkAsistenciaPayload {
-    const norm = (v: any) =>
-      typeof v === 'number' && !isNaN(v) ? Math.max(0, Math.floor(v)) : undefined;
+  /** Devuelve las faltas existentes (por estudiante) para un curso/materia/trimestre */
+  obtenerFaltas(params: {
+    cursoId: string; anioLectivoId: string; materiaId: string; trimestre: Trimestre;
+  }): Observable<{ estudiantes: Array<{estudianteId: string; faltasJustificadas: number; faltasInjustificadas: number}> }> {
+    let p = new HttpParams()
+      .set('cursoId', params.cursoId)
+      .set('anioLectivoId', params.anioLectivoId)
+      .set('materiaId', params.materiaId)
+      .set('trimestre', params.trimestre);
+    return this.http.get<{ estudiantes: Array<{estudianteId: string; faltasJustificadas: number; faltasInjustificadas: number}> }>(
+      `${this.baseUrl}`,
+      { params: p }
+    );
+  }
 
-    const rows: AsistenciaInputRow[] = input.tableRows.map((r) => ({
-      estudianteId: String(r.estudianteId),
-      faltasJustificadas: norm(r.faltasJustificadas),
-      faltasInjustificadas: norm(r.faltasInjustificadas),
-      diasLaborados: norm(r.diasLaborados),
-    }));
-
-    return {
-      cursoId: input.cursoId,
-      anioLectivoId: input.anioLectivoId,
-      materiaId: input.materiaId,
-      trimestre: input.trimestre,
-      rows,
-    };
+  /** Guarda en bloque las faltas (justificadas/injustificadas) por estudiante para el trimestre */
+  guardarFaltasBulk(payload: GuardarFaltasBulkPayload) {
+    return this.http.post<any>(`${this.baseUrl}/bulk-faltas`, payload);
   }
 }

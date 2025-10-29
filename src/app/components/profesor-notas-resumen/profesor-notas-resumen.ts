@@ -132,9 +132,6 @@ type RowVM = {
               >materiaId={{ materiaId || materiasAsignadas()[0]?.materiaId }}</mat-chip
             >
           </mat-chip-set>
-          <button mat-button color="primary" class="toggle" (click)="showIds = !showIds">
-            <mat-icon>bug_report</mat-icon> {{ showIds ? 'Ocultar IDs' : 'Ver IDs' }}
-          </button>
         </div>
 
         <mat-progress-bar *ngIf="cargando()" mode="indeterminate"></mat-progress-bar>
@@ -518,7 +515,7 @@ export class ProfesorNotasResumenComponent implements OnInit {
           .obtenerNotas({ cursoId, anioLectivoId: anioId, materiaId, trimestre: tri })
           .subscribe({
             next: (res) => {
-              const arr: any[] = res?.estudiantes ?? [];         
+              const arr: any[] = res?.estudiantes ?? [];
 
               const idx = new Map<string, number | null>();
               for (const it of arr) {

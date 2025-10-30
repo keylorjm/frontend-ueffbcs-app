@@ -1,40 +1,41 @@
-// src/app/guards/profesor.guard.ts
-import { CanActivateFn, Router } from '@angular/router';
+import { CanActivateFn, Router, UrlTree } from '@angular/router';
 import { inject } from '@angular/core';
 import { AuthService } from '../services/auth.service';
-import { of, switchMap, map, take } from 'rxjs';
+import { map, switchMap, of } from 'rxjs';
 
 export const ProfesorGuard: CanActivateFn = (route, state) => {
-  const auth = inject(AuthService);
+  const authService = inject(AuthService);
   const router = inject(Router);
+  const isBrowser = typeof window !== 'undefined';
   const returnUrl = state.url || '/';
 
-  return auth.isAuthenticated$.pipe(
-    take(1),
-    switchMap(isAuth => {
-      // Sin sesión ni token → al login
-      if (!isAuth && !auth.getToken()) {
-        return of(router.createUrlTree(['/login'], { queryParams: { returnUrl } }));
-      }
-
-      // Ya autenticado → validar rol directamente
-      if (isAuth) {
-        const role = (auth.getrole() ?? '').toLowerCase();
+  return authService.isAuthenticated$.pipe(
+    switchMap((isAuthenticated) => {
+      // ✅ Si ya está autenticado → verificar rol
+      if (isAuthenticated) {
+        const role = (authService.getrole() ?? '').toLowerCase();
         if (role === 'profesor') return of(true);
-        // Si es admin → mandarlo al panel admin
-        return of(router.createUrlTree(['/app/usuarios']));
+        if (role === 'admin') return of(router.createUrlTree(['/app/dashboard-admin']));
+        return of(router.createUrlTree(['/login']));
       }
 
-      // Si hay token pero no está cargado el usuario aún
-      return auth.ensureUserLoaded().pipe(
-        map(ok => {
-          if (!ok) return router.createUrlTree(['/login'], { queryParams: { returnUrl } });
-          const role = (auth.getrole() ?? '').toLowerCase();
-          return role === 'profesor'
-            ? true
-            : router.createUrlTree(['/app/usuarios']);
-        })
-      );
+      // 🔐 Si no está autenticado pero hay token → intentar cargar usuario
+      const hasToken = authService.getToken() !== null;
+      if (hasToken) {
+        return authService.ensureUserLoaded().pipe(
+          map((ok): boolean | UrlTree => {
+            if (!ok)
+              return router.createUrlTree(['/login'], { queryParams: { returnUrl } });
+            const role = (authService.getrole() ?? '').toLowerCase();
+            if (role === 'profesor') return true;
+            if (role === 'admin') return router.createUrlTree(['/app/dashboard-admin']);
+            return router.createUrlTree(['/login']);
+          })
+        );
+      }
+
+      // 🚫 No hay sesión ni token → al login
+      return of(router.createUrlTree(['/login'], { queryParams: { returnUrl } }));
     })
   );
 };

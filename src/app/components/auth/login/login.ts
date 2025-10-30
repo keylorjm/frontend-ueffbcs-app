@@ -71,7 +71,7 @@ export class LoginComponent {
               const destino = isAdminOnlyReturn ? '/app/mis-cursos' : (rawReturn || '/app/mis-cursos');
               this.router.navigateByUrl(destino);
             } else if (role === 'admin') {
-              this.router.navigateByUrl(rawReturn || '/app/usuarios');
+              this.router.navigateByUrl(rawReturn || '/app/dashboard-admin');
             } else {
               this.router.navigateByUrl('/app');
             }

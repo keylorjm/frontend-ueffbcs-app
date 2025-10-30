@@ -51,7 +51,7 @@ import { FormsModule } from '@angular/forms';
 
       <!-- 🔹 ADMIN: ve todas las opciones -->
       <ng-template #adminMenu>
-        <a mat-list-item routerLink="/app/mis-cursos" routerLinkActive="active-link">
+        <a mat-list-item routerLink="/app/dashboard-admin" routerLinkActive="active-link">
           <mat-icon matListItemIcon>dashboard</mat-icon>
           <span matListItemTitle>Dashboard</span>
         </a>

@@ -1,4 +1,3 @@
-// src/app/app.routes.ts
 import { Routes } from '@angular/router';
 import { LoginComponent } from './components/auth/login/login';
 import { RecuperarContrasenaComponent } from './components/auth/recuperar-contrasena/recuperar-contrasena';
@@ -10,10 +9,10 @@ import { AdminGuard } from './guards/admin.guard';
 import { RestablecerContrasenaComponent } from './components/auth/restablecer-contrasena/restablecer-contrasena';
 
 export const routes: Routes = [
-  // 1. Ruta de Inicio (Al cargar la app, redirige al login)
+  // 1️⃣ Ruta principal → Login
   { path: '', redirectTo: 'login', pathMatch: 'full' },
 
-  // 2. Rutas de Autenticación (Públicas)
+  // 2️⃣ Autenticación pública
   { path: 'login', component: LoginComponent, title: 'Iniciar Sesión' },
   {
     path: 'recuperar-contrasena',
@@ -26,14 +25,31 @@ export const routes: Routes = [
     title: 'Restablecer Clave',
   },
 
-  // 3. Rutas Protegidas (Requieren Login)
+  // 3️⃣ Rutas protegidas
   {
     path: 'app',
     component: MainLayoutComponent,
     canActivate: [AuthGuard],
     children: [
-      { path: '', redirectTo: 'mis-cursos', pathMatch: 'full' },
+      // 🔹 Redirección según rol
+      {
+        path: '',
+        pathMatch: 'full',
+        redirectTo: 'dashboard-admin',
+      },
 
+      // ============================
+      // ADMINISTRADOR
+      // ============================
+      {
+        path: 'dashboard-admin',
+        canActivate: [AdminGuard],
+        loadComponent: () =>
+          import('./components/dashboard-admin/dashboard-admin').then(
+            (m) => m.DashboardAdminComponent
+          ),
+        title: 'Panel de Administración',
+      },
       {
         path: 'anio-lectivo',
         canActivate: [AdminGuard],
@@ -42,66 +58,6 @@ export const routes: Routes = [
             (m) => m.AnioLectivoAdminComponent
           ),
       },
-      {
-        path: 'mis-cursos',
-        canActivate: [ProfesorGuard],
-        loadComponent: () =>
-          import('./components/profesor-dashboard/profesor-dashboard').then(
-            (m) => m.ProfesorDashboardComponent
-          ),
-        title: 'Mis Cursos',
-      },
-
-      {
-        path: 'profesor-notas',
-        canActivate: [ProfesorGuard],
-        loadComponent: () =>
-          import('./components/profesor-notas-curso/profesor-notas-curso').then(
-            (m) => m.ProfesorNotasCursoComponent
-          ),
-        title: 'Registro de Notas',
-      },
-
-      {
-        path: 'resumen',
-        canActivate: [ProfesorGuard],
-        loadComponent: () =>
-          import('./components/profesor-notas-resumen/profesor-notas-resumen').then(
-            (m) => m.ProfesorNotasResumenComponent
-          ),
-        title: 'Reportes del Profesor',
-      },
-
-      {
-        path: 'agregar-asistencia',
-        canActivate: [ProfesorGuard],
-        loadComponent: () =>
-          import('./components/profesor-asistencias/profesor-asistencias').then(
-            (m) => m.ProfesorAsistenciasCursoComponent
-          ),
-        title: 'Asistencia por Trimestre',
-      },
-
-      {
-        path: 'ver-asistencia',
-        canActivate: [ProfesorGuard],
-        loadComponent: () =>
-          import('./components/profesor-asistencias-resumen/profesor-asistencias-resumen').then(
-            (m) => m.ProfesorAsistenciasResumenComponent
-          ),
-        title: 'Asistencia por Trimestre',
-      },
-
-      {
-        path: 'reporte',
-        canActivate: [ProfesorGuard],
-        loadComponent: () =>
-          import('./components/reporte-estudiante/reporte-estudiante').then(
-            (m) => m.ReporteEstudianteComponent
-          ),
-        title: 'Reporte por Estudiante',
-      },
-
       {
         path: 'usuarios',
         canActivate: [AdminGuard],
@@ -112,42 +68,109 @@ export const routes: Routes = [
         path: 'estudiantes',
         canActivate: [AdminGuard],
         loadComponent: () =>
-          import('./components/estudiantes/estudiantes').then((m) => m.EstudiantesComponent),
+          import('./components/estudiantes/estudiantes').then(
+            (m) => m.EstudiantesComponent
+          ),
         title: 'Gestión de Estudiantes',
       },
       {
         path: 'calificaciones',
         canActivate: [AdminGuard],
         loadComponent: () =>
-          import('./components/calificaciones/calificaciones').then((m) => m.Calificaciones),
+          import('./components/calificaciones/calificaciones').then(
+            (m) => m.Calificaciones
+          ),
         title: 'Ingreso de Calificaciones',
       },
       {
         path: 'cursos',
         canActivate: [AdminGuard],
-        loadComponent: () => import('./components/cursos/cursos').then((m) => m.CursosComponent),
+        loadComponent: () =>
+          import('./components/cursos/cursos').then((m) => m.CursosComponent),
         title: 'Gestión de Cursos',
       },
       {
         path: 'materias',
         canActivate: [AdminGuard],
         loadComponent: () =>
-          import('./components/materias/materias').then((m) => m.MateriasComponent),
+          import('./components/materias/materias').then(
+            (m) => m.MateriasComponent
+          ),
         title: 'Gestión de Materias',
       },
-
       {
         path: 'admin-boletin',
         canActivate: [AdminGuard],
         loadComponent: () =>
-          import('./components/reporte-curso/reporte-curso').then((m) => m.ReporteCursoComponent),
-        title: 'Gestión de Estudiantes',
+          import('./components/reporte-curso/reporte-curso').then(
+            (m) => m.ReporteCursoComponent
+          ),
+        title: 'Reportes Académicos',
       },
 
-      { path: '**', redirectTo: 'mis-cursos' },
+      // ============================
+      // PROFESOR
+      // ============================
+      {
+        path: 'mis-cursos',
+        canActivate: [ProfesorGuard],
+        loadComponent: () =>
+          import('./components/profesor-dashboard/profesor-dashboard').then(
+            (m) => m.ProfesorDashboardComponent
+          ),
+        title: 'Mis Cursos',
+      },
+      {
+        path: 'profesor-notas',
+        canActivate: [ProfesorGuard],
+        loadComponent: () =>
+          import('./components/profesor-notas-curso/profesor-notas-curso').then(
+            (m) => m.ProfesorNotasCursoComponent
+          ),
+        title: 'Registro de Notas',
+      },
+      {
+        path: 'resumen',
+        canActivate: [ProfesorGuard],
+        loadComponent: () =>
+          import('./components/profesor-notas-resumen/profesor-notas-resumen').then(
+            (m) => m.ProfesorNotasResumenComponent
+          ),
+        title: 'Reportes del Profesor',
+      },
+      {
+        path: 'agregar-asistencia',
+        canActivate: [ProfesorGuard],
+        loadComponent: () =>
+          import('./components/profesor-asistencias/profesor-asistencias').then(
+            (m) => m.ProfesorAsistenciasCursoComponent
+          ),
+        title: 'Asistencia por Trimestre',
+      },
+      {
+        path: 'ver-asistencia',
+        canActivate: [ProfesorGuard],
+        loadComponent: () =>
+          import('./components/profesor-asistencias-resumen/profesor-asistencias-resumen').then(
+            (m) => m.ProfesorAsistenciasResumenComponent
+          ),
+        title: 'Resumen de Asistencia',
+      },
+      {
+        path: 'reporte',
+        canActivate: [ProfesorGuard],
+        loadComponent: () =>
+          import('./components/reporte-estudiante/reporte-estudiante').then(
+            (m) => m.ReporteEstudianteComponent
+          ),
+        title: 'Reporte por Estudiante',
+      },
+
+      // 🔸 Catch-all interno
+      { path: '**', redirectTo: 'dashboard' },
     ],
   },
 
-  // 4. Ruta comodín (404)
+  // 4️⃣ Ruta comodín
   { path: '**', redirectTo: 'login' },
 ];

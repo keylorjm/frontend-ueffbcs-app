@@ -99,7 +99,7 @@ export const routes: Routes = [
         title: 'Gestión de Materias',
       },
       {
-        path: 'admin-boletin',
+        path: 'boletin',
         canActivate: [AdminGuard],
         loadComponent: () =>
           import('./components/reporte-curso/reporte-curso').then(

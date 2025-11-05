@@ -43,7 +43,7 @@ type RowVM = {
     CommonModule, FormsModule,
     MatCardModule, MatSelectModule, MatFormFieldModule, MatInputModule,
     MatButtonModule, MatSnackBarModule, MatIconModule, MatDividerModule,
-    MatTableModule, MatProgressBarModule, MatTooltipModule, MatChipsModule
+    MatTableModule, MatProgressBarModule, MatTooltipModule, MatChipsModule,
   ],
   template: `
   <div class="wrap">

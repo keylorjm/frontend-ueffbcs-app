@@ -86,7 +86,7 @@ import { FormsModule } from '@angular/forms';
           <span matListItemTitle>Materias</span>
         </a>
 
-        <a mat-list-item routerLink="/app/admin-boletin" routerLinkActive="active-link">
+        <a mat-list-item routerLink="/app/boletin" routerLinkActive="active-link">
           <mat-icon matListItemIcon>grading</mat-icon>
           <span matListItemTitle>Boletines</span>
         </a>

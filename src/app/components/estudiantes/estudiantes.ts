@@ -17,9 +17,6 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatCardModule } from '@angular/material/card';
 import {
   of,
   catchError,
@@ -34,13 +31,13 @@ import Swal from 'sweetalert2';
 
 import { Estudiante, EstudianteService } from '../../services/estudiante.service';
 import { EstudianteFormularioComponent } from '../estudiante-formulario/estudiante-formulario';
+import { MatCard } from "@angular/material/card";
 
 @Component({
   selector: 'app-estudiantes',
   standalone: true,
   imports: [
     CommonModule,
-    MatCardModule,
     MatTableModule,
     MatButtonModule,
     MatIconModule,
@@ -48,66 +45,69 @@ import { EstudianteFormularioComponent } from '../estudiante-formulario/estudian
     MatProgressBarModule,
     MatProgressSpinnerModule,
     MatPaginatorModule,
-    MatFormFieldModule,
-    MatInputModule,
-  ],
+    MatCard
+],
   template: `
-    <div class="wrap">
+    <section class="wrap">
+      <!-- Header -->
       <div class="header">
-        <div class="titles">
-          <h1>Gestión de Estudiantes</h1>
-          <p class="subtitle">Crea, importa y administra estudiantes</p>
+        <div class="title-wrap">
+          <h1 class="title">Gestión de Estudiantes</h1>
+          <span class="subtitle">Crea, importa y administra estudiantes</span>
         </div>
 
-        <div class="header-actions">
+        <div class="actions">
+          <!-- Search custom (soft) -->
+          <div class="search">
+            <mat-icon class="search-icon" aria-hidden="true">search</mat-icon>
+            <input
+              class="search-input"
+              placeholder="Buscar por nombre, email, cédula o celular…"
+              (input)="applyFilter($event)"
+              autocomplete="off"
+            />
+            <button
+              class="search-clear"
+              *ngIf="hasFilter"
+              (click)="clearFilter()"
+              aria-label="Limpiar búsqueda">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+
           <button mat-icon-button matTooltip="Refrescar" (click)="reload()">
             <mat-icon>refresh</mat-icon>
           </button>
 
           <div class="upload-wrap">
             <input type="file" #fileInput accept=".xlsx" hidden (change)="onExcelSelected($event)" />
-            <button mat-stroked-button (click)="fileInput.click()">
+            <button mat-stroked-button class="btn-stroked" (click)="fileInput.click()">
               <mat-icon>upload</mat-icon>
               Subir Excel
             </button>
           </div>
 
-          <button mat-flat-button color="primary" (click)="abrirFormulario()">
+          <button mat-raised-button color="primary" class="btn-primary" (click)="abrirFormulario()">
             <mat-icon>add_box</mat-icon>
             Crear Estudiante
           </button>
         </div>
       </div>
 
-      <mat-card class="card">
+      <!-- Card contenedor -->
+      <mat-card class="card mat-elevation-z1">
         <mat-progress-bar *ngIf="(isLoading$ | async)" mode="indeterminate"></mat-progress-bar>
 
+        <!-- Toolbar secundaria: resultados -->
         <div class="toolbar">
-          <mat-form-field appearance="outline" class="search">
-            <mat-icon matPrefix>search</mat-icon>
-            <input
-              matInput
-              placeholder="Buscar por nombre, email, cédula o celular"
-              (keyup)="applyFilter($event)"
-              autocomplete="off"
-            />
-            <button
-              *ngIf="hasFilter"
-              matSuffix
-              mat-icon-button
-              (click)="clearFilter()"
-              aria-label="Limpiar búsqueda">
-              <mat-icon>close</mat-icon>
-            </button>
-          </mat-form-field>
-
           <span class="results" *ngIf="dataSource.data?.length">
             {{ dataSource.filteredData.length }} resultado(s)
           </span>
         </div>
 
-        <div class="table-wrap" [class.center]="!dataSource.data.length && !(isLoading$ | async)">
-          <table mat-table [dataSource]="dataSource" class="modern-table mat-elevation-z2">
+        <!-- Tabla estilo “modern-table” -->
+        <div class="table-wrap table-slim" [class.center]="!dataSource.data.length && !(isLoading$ | async)">
+          <table mat-table [dataSource]="dataSource" class="table compact modern-table">
 
             <!-- Nombre -->
             <ng-container matColumnDef="nombre">
@@ -135,12 +135,12 @@ import { EstudianteFormularioComponent } from '../estudiante-formulario/estudian
 
             <!-- Acciones -->
             <ng-container matColumnDef="acciones">
-              <th mat-header-cell *matHeaderCellDef class="center">Acciones</th>
-              <td mat-cell *matCellDef="let e" class="center">
-                <button mat-icon-button color="primary" matTooltip="Editar" (click)="abrirFormulario(e)" matTooltip="Editar">
+              <th mat-header-cell *matHeaderCellDef class="text-right">Acciones</th>
+              <td mat-cell *matCellDef="let e" class="text-right actions-cell">
+                <button mat-icon-button color="primary" class="icon-btn" matTooltip="Editar" (click)="abrirFormulario(e)">
                   <mat-icon>edit</mat-icon>
                 </button>
-                <button mat-icon-button color="warn" matTooltip="Eliminar" (click)="eliminarEstudiante(e.uid!)" matTooltip="Eliminar">
+                <button mat-icon-button color="warn" class="icon-btn" matTooltip="Eliminar" (click)="eliminarEstudiante(e.uid!)">
                   <mat-icon>delete</mat-icon>
                 </button>
               </td>
@@ -149,14 +149,15 @@ import { EstudianteFormularioComponent } from '../estudiante-formulario/estudian
             <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
             <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
 
-            <tr class="mat-row empty" *matNoDataRow>
-              <td class="mat-cell" [attr.colspan]="displayedColumns.length">
+            <!-- Empty -->
+            <tr *ngIf="!(isLoading$ | async) && dataSource.filteredData.length === 0">
+              <td class="empty-cell" [attr.colspan]="displayedColumns.length">
                 <div class="empty-state">
                   <mat-icon>group_off</mat-icon>
                   <div>
                     <h3>Sin resultados</h3>
                     <p>Prueba ajustando tu búsqueda o limpia el filtro.</p>
-                    <button mat-stroked-button (click)="clearFilter()">Limpiar búsqueda</button>
+                    <button mat-stroked-button class="btn-outline" (click)="clearFilter()">Limpiar búsqueda</button>
                   </div>
                 </div>
               </td>
@@ -173,49 +174,100 @@ import { EstudianteFormularioComponent } from '../estudiante-formulario/estudian
           [length]="dataSource.filteredData.length"
           [pageSize]="10"
           [pageSizeOptions]="[5,10,25,50]"
-          aria-label="Paginación"
-        ></mat-paginator>
+          aria-label="Paginación">
+        </mat-paginator>
       </mat-card>
-    </div>
+    </section>
   `,
   styles: [`
-    .wrap { padding: 20px; display: grid; gap: 16px; }
-    .header { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; }
-    .titles h1 { margin: 0; font-weight: 700; }
-    .subtitle { margin: 2px 0 0; color: #6b7280; font-size: 13px; }
-    .header-actions { display: flex; gap: 8px; align-items: center; }
-    .upload-wrap { display: flex; }
+    /* ----- Layout general (soft/compact) ----- */
+    .wrap {
+      max-width: 980px;
+      margin: 24px auto;
+      padding: 0 12px;
+    }
+    .header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .title-wrap { display: flex; flex-direction: column; gap: 4px; }
+    .title { font-size: 28px; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
+    .subtitle { color: #6b7280; font-size: 13px; }
+    .actions { display: flex; align-items: center; gap: 10px; }
 
-    .card { border-radius: 16px; overflow: hidden; }
-    .toolbar { display: flex; align-items: center; gap: 12px; padding: 12px; background: #fafafa; border-bottom: 1px solid #f0f0f0; }
-    .search { flex: 1; min-width: 260px; }
+    /* Botones */
+    .btn-primary { border-radius: 12px; padding-inline: 14px; height: 40px; }
+    .btn-stroked { border-radius: 12px; height: 36px; border-color: #d1d5db; }
+    .btn-outline {
+      height: 36px; padding: 0 18px; border-radius: 18px; font-size: 14px; font-weight: 600;
+      color: #1e3a8a; border: 1px solid #94a3b8; background: transparent; transition: all .2s ease;
+    }
+    .btn-outline:hover { background: #f1f5f9; border-color: #64748b; }
+
+    /* Card */
+    .card {
+      border-radius: 18px;
+      padding: 0;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Search (custom, ligera) */
+    .search { position: relative; width: 300px; min-width: 220px; }
+    .search-input {
+      width: 100%; height: 40px; border-radius: 12px;
+      padding: 0 36px 0 36px; border: 1px solid #e5e7eb; background: #fff; outline: none;
+    }
+    .search-input:focus { border-color: #c7d2fe; box-shadow: 0 0 0 3px #e0e7ff; }
+    .search-icon {
+      position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #6b7280;
+    }
+    .search-clear {
+      position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+      height: 32px; width: 32px; border: none; background: transparent; border-radius: 8px; cursor: pointer; color: #6b7280;
+    }
+
+    /* Toolbar secundaria */
+    .toolbar { display: flex; align-items: center; justify-content: flex-end; padding: 10px 12px; }
     .results { font-size: 12px; color: #6b7280; }
 
-    .table-wrap { position: relative; overflow: auto; }
-    .modern-table { width: 100%; border-spacing: 0; }
-    th[mat-header-cell] { font-weight: 600; color: #374151; background: #fcfcfc; }
-    td[mat-cell], th[mat-header-cell] { padding: 10px 12px; }
+    /* Tabla moderna */
+    .table-wrap { background: #fff; position: relative; overflow: auto; }
+    .modern-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    .modern-table th.mat-header-cell {
+      background: #f7f7fb; font-weight: 700; font-size: 13px; letter-spacing: 0.02em;
+      border-bottom: 1px solid #e5e7eb; padding: 10px 14px; color: #111827;
+    }
+    .modern-table td.mat-cell {
+      padding: 12px 14px; border-bottom: 1px solid #e5e7eb;
+    }
+    .modern-table tr.mat-row:hover td { background: #fafafa; }
+    .table-slim .compact th.mat-header-cell,
+    .table-slim .compact td.mat-cell { padding: 12px 14px; }
+    .text-right { text-align: right; }
+
+    .actions-cell { white-space: nowrap; }
+    .icon-btn { margin-right: 2px; }
+
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Liberation Mono", monospace; }
     .muted { color: #6b7280; }
-    .center { text-align: center; }
 
+    /* Empty state */
+    .empty-cell { padding: 14px; }
     .empty-state {
-      display: grid;
-      grid-template-columns: 48px 1fr;
-      gap: 12px;
-      align-items: center;
-      padding: 18px;
-      border: 1px dashed #e5e7eb;
-      border-radius: 12px;
-      color: #6b7280;
-      background: #fbfbfb;
-      margin: 12px;
+      display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center;
+      padding: 18px; border: 1px dashed #e5e7eb; border-radius: 12px; color: #6b7280; background: #fbfbfb;
     }
-    .empty-state mat-icon { font-size: 32px; height: 32px; width: 32px; opacity: .7; }
+    .empty-state mat-icon { font-size: 28px; height: 28px; width: 28px; opacity: .7; }
 
+    /* Loading */
     .loading { display: grid; justify-content: center; align-items: center; gap: 8px; padding: 24px; color: #6b7280; }
 
-    mat-paginator { border-top: 1px solid #f0f0f0; background: #f9fafb; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; }
+    /* Paginador */
+    mat-paginator { border-top: 1px solid #e5e7eb; }
   `],
 })
 export class EstudiantesComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -232,7 +284,6 @@ export class EstudiantesComponent implements OnInit, AfterViewInit, OnDestroy {
   private reload$$ = new Subject<void>();
   private dataSubscription?: Subscription;
 
-  // Ahora usamos MatTableDataSource para filtro + paginación
   public dataSource = new MatTableDataSource<Estudiante>([]);
   public hasFilter = false;
 
@@ -258,9 +309,7 @@ export class EstudiantesComponent implements OnInit, AfterViewInit, OnDestroy {
         tap((estudiantes) => {
           this.dataSource.data = estudiantes ?? [];
           this.loading$$.next(false);
-          // Reset de paginación al recargar datos
           if (this.paginator) this.paginator.firstPage();
-          // Reaplicar filtro si existía
           if (this.hasFilter) this.dataSource.filter = this.dataSource.filter;
           this.cdr.detectChanges();
         }),
@@ -284,7 +333,6 @@ export class EstudiantesComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.dataSource.paginator = this.paginator;
-    // Primera carga
     setTimeout(() => this.reload(), 0);
   }
 
@@ -292,7 +340,7 @@ export class EstudiantesComponent implements OnInit, AfterViewInit, OnDestroy {
     this.dataSubscription?.unsubscribe();
   }
 
-  // ---- Búsqueda ----
+  // ---- Búsqueda (con input custom) ----
   applyFilter(event: Event): void {
     const value = (event.target as HTMLInputElement).value ?? '';
     this.dataSource.filter = value.trim().toLowerCase();
@@ -303,8 +351,7 @@ export class EstudiantesComponent implements OnInit, AfterViewInit, OnDestroy {
   clearFilter(): void {
     this.dataSource.filter = '';
     this.hasFilter = false;
-    // Limpia el input visible
-    const input = document.querySelector('.toolbar input[matInput]') as HTMLInputElement | null;
+    const input = document.querySelector('.search-input') as HTMLInputElement | null;
     if (input) input.value = '';
     if (this.dataSource.paginator) this.dataSource.paginator.firstPage();
   }
@@ -318,10 +365,7 @@ export class EstudiantesComponent implements OnInit, AfterViewInit, OnDestroy {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
 
-    if (!file) {
-      input.value = '';
-      return;
-    }
+    if (!file) { input.value = ''; return; }
 
     Swal.fire({
       title: '¿Confirmar Importación?',

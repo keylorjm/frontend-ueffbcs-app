@@ -2,8 +2,8 @@
 import { Component, inject, signal, OnInit, TemplateRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
+// Material
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -18,6 +18,9 @@ import { MatChipsModule } from '@angular/material/chips';
 import { AnioLectivoService, AnioLectivo } from '../../services/anio-lectivo.service';
 import { map } from 'rxjs/operators';
 
+// SweetAlert2
+import Swal from 'sweetalert2';
+
 type UIAnio = AnioLectivo & { anioInicio?: number; anioFin?: number };
 
 @Component({
@@ -26,7 +29,6 @@ type UIAnio = AnioLectivo & { anioInicio?: number; anioFin?: number };
   imports: [
     CommonModule,
     ReactiveFormsModule,
-    MatSnackBarModule,
     MatCardModule,
     MatButtonModule,
     MatIconModule,
@@ -250,28 +252,6 @@ type UIAnio = AnioLectivo & { anioInicio?: number; anioFin?: number };
           </div>
         </div>
       </form>
-    </ng-template>
-
-    <!-- ========== DIÁLOGO: Confirmar eliminación ========== -->
-    <ng-template #dialogConfirm let-data>
-      <div class="confirm">
-        <div class="confirm-header">
-          <mat-icon color="warn">warning</mat-icon>
-          <div class="confirm-title">Eliminar año lectivo</div>
-        </div>
-
-        <div class="confirm-body">
-          ¿Seguro que deseas eliminar "<strong>{{ data?.nombre }}</strong>"?
-          Esta acción no se puede deshacer.
-        </div>
-
-        <div class="confirm-footer">
-          <button mat-button class="btn-outline" mat-dialog-close="false">Cancelar</button>
-          <button mat-raised-button color="warn" class="btn-soft-primary" mat-dialog-close="true">
-            Eliminar
-          </button>
-        </div>
-      </div>
     </ng-template>
   `,
   styles: [
@@ -589,40 +569,15 @@ type UIAnio = AnioLectivo & { anioInicio?: number; anioFin?: number };
         background: #f1f5f9;
         border-color: #64748b;
       }
-
-      /* Dialog confirm por consistencia */
-      .confirm {
-        width: min(92vw, 420px);
-      }
-      .confirm-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: 700;
-      }
-      .confirm-title {
-        font-size: 16px;
-      }
-      .confirm-body {
-        color: #6b7280;
-        margin: 8px 0 12px;
-      }
-      .confirm-footer {
-        display: flex;
-        justify-content: flex-end;
-        gap: 8px;
-      }
     `,
   ],
 })
 export class AnioLectivoAdminComponent implements OnInit {
   private readonly svc = inject(AnioLectivoService);
   private readonly fb = inject(FormBuilder);
-  private readonly snack = inject(MatSnackBar);
   private readonly dialog = inject(MatDialog);
 
   @ViewChild('dialogForm', { static: true }) dialogFormTpl!: TemplateRef<unknown>;
-  @ViewChild('dialogConfirm', { static: true }) dialogConfirmTpl!: TemplateRef<unknown>;
 
   isBusy = signal(false);
   items = signal<UIAnio[]>([]);
@@ -630,6 +585,15 @@ export class AnioLectivoAdminComponent implements OnInit {
 
   displayedColumns = ['nombre', 'rango', 'estado', 'acciones'];
   filtro = signal<string>('');
+
+  // SweetAlert2 Toast consistente con el estilo “soft/compact”
+  private readonly toast = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 2000,
+    timerProgressBar: true,
+  });
 
   // Form tipado y nonNullable
   form = this.fb.nonNullable.group(
@@ -668,7 +632,8 @@ export class AnioLectivoAdminComponent implements OnInit {
   recargar(): void {
     this.cargar(true);
   }
-  private cargar(showSnack = false): void {
+
+  private cargar(showToast = false): void {
     this.isBusy.set(true);
     this.svc
       .getAll()
@@ -687,23 +652,24 @@ export class AnioLectivoAdminComponent implements OnInit {
       .subscribe({
         next: (rows) => {
           this.items.set(rows);
-          if (showSnack) this.snack.open('Datos actualizados', 'OK', { duration: 1500 });
+          if (showToast) this.toast.fire({ icon: 'success', title: 'Datos actualizados' });
           this.isBusy.set(false);
         },
         error: (e) => {
           this.isBusy.set(false);
-          this.snack.open(e?.error?.message || 'Error cargando años lectivos', 'Cerrar', {
-            duration: 3000,
+          this.toast.fire({
+            icon: 'error',
+            title: e?.error?.message || 'Error cargando años lectivos',
           });
         },
       });
   }
 
- year(v?: string): number | undefined {
-  if (!v) return undefined;
-  const m = /^(\d{4})/.exec(v);
-  return m ? Number(m[1]) : undefined;
-}
+  year(v?: string): number | undefined {
+    if (!v) return undefined;
+    const m = /^(\d{4})/.exec(v);
+    return m ? Number(m[1]) : undefined;
+  }
 
   private asStr(v?: number): string {
     return v == null ? '' : String(v);
@@ -764,7 +730,7 @@ export class AnioLectivoAdminComponent implements OnInit {
 
   guardar(): void {
     if (this.form.invalid) {
-      this.snack.open('Revisa los campos del formulario.', 'Cerrar', { duration: 2000 });
+      this.toast.fire({ icon: 'info', title: 'Revisa los campos del formulario' });
       return;
     }
     const payload = {
@@ -777,8 +743,9 @@ export class AnioLectivoAdminComponent implements OnInit {
     const obs = id ? this.svc.update(id, payload) : this.svc.create(payload);
     obs.subscribe({
       next: () => {
-        this.snack.open(id ? 'Año lectivo actualizado' : 'Año lectivo creado', 'OK', {
-          duration: 1500,
+        this.toast.fire({
+          icon: 'success',
+          title: id ? 'Año lectivo actualizado' : 'Año lectivo creado',
         });
         this.form.reset();
         this.cerrarDialog();
@@ -786,50 +753,67 @@ export class AnioLectivoAdminComponent implements OnInit {
       },
       error: (e) => {
         this.isBusy.set(false);
-        this.snack.open(e?.error?.message || 'Error guardando', 'Cerrar', { duration: 3000 });
+        this.toast.fire({ icon: 'error', title: e?.error?.message || 'Error guardando' });
       },
     });
   }
 
   confirmarEliminar(r: AnioLectivo): void {
-    const ref = this.dialog.open(this.dialogConfirmTpl, { data: { nombre: r.nombre } });
-    ref.afterClosed().subscribe((ok: boolean) => {
-      if (ok) this.eliminar(r);
+    Swal.fire({
+      title: 'Eliminar año lectivo',
+      html: `¿Seguro que deseas eliminar <b>"${r.nombre}"</b>? Esta acción no se puede deshacer.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Eliminar',
+      cancelButtonText: 'Cancelar',
+      reverseButtons: true,
+      confirmButtonColor: '#dc2626', // rojo warn
+      cancelButtonColor: '#94a3b8',  // gris outline
+      buttonsStyling: true,
+    }).then((res) => {
+      if (res.isConfirmed) this.eliminar(r);
     });
   }
 
   eliminar(r: AnioLectivo): void {
-    // Validación defensiva del id
     if (!r?._id) {
-      this.snack.open('No se encontró el identificador del registro.', 'Cerrar', { duration: 2500 });
+      this.toast.fire({ icon: 'error', title: 'No se encontró el identificador del registro.' });
       return;
     }
     this.isBusy.set(true);
+    const nombreEliminado = r.nombre;
+
     this.svc.delete(r._id).subscribe({
       next: () => {
-        this.snack.open('Eliminado', 'OK', { duration: 1500 });
+        this.toast.fire({
+          icon: 'success',
+          title: `El año lectivo "${nombreEliminado}" ha sido eliminado.`,
+        });
         this.cargar();
       },
       error: (e) => {
         this.isBusy.set(false);
-        this.snack.open(e?.error?.message || 'Error eliminando', 'Cerrar', { duration: 3000 });
+        const msg = e?.error?.message || `Error eliminando el año lectivo "${nombreEliminado}".`;
+        this.toast.fire({ icon: 'error', title: msg });
       },
     });
   }
 
   marcarComoActual(r: AnioLectivo): void {
     if (r.actual) return;
+    if (!r?._id) {
+      this.toast.fire({ icon: 'error', title: 'No se encontró el identificador del registro.' });
+      return;
+    }
     this.isBusy.set(true);
     this.svc.setActual(r._id).subscribe({
       next: () => {
-        this.snack.open('"' + r.nombre + '" marcado como actual', 'OK', { duration: 1500 });
+        this.toast.fire({ icon: 'success', title: `"${r.nombre}" marcado como actual` });
         this.cargar();
       },
       error: (e) => {
         this.isBusy.set(false);
-        this.snack.open(e?.error?.message || 'Error al marcar como actual', 'Cerrar', {
-          duration: 3000,
-        });
+        this.toast.fire({ icon: 'error', title: e?.error?.message || 'Error al marcar como actual' });
       },
     });
   }

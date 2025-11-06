@@ -42,11 +42,6 @@ import { FormsModule } from '@angular/forms';
           <span matListItemTitle>Agregar Asistencias</span>
         </a>    
 
-
-        <a mat-list-item routerLink="/app/reportes" routerLinkActive="active-link">
-          <mat-icon matListItemIcon>assignment</mat-icon>
-          <span matListItemTitle>Reportes</span>
-        </a>
       </ng-container>
 
       <!-- 🔹 ADMIN: ve todas las opciones -->

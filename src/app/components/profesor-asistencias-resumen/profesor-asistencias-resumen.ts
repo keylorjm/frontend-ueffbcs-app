@@ -98,10 +98,7 @@ type RowVM = {
           <mat-chip appearance="outlined" *ngIf="showIds">cursoId={{cursoId}}</mat-chip>
           <mat-chip appearance="outlined" *ngIf="showIds">anioId={{ anioLectivoId() }}</mat-chip>
           <mat-chip appearance="outlined" *ngIf="showIds">materiaId={{ materiaId || materiasAsignadas()[0]?.materiaId }}</mat-chip>
-        </mat-chip-set>
-        <button mat-button color="primary" class="toggle" (click)="showIds = !showIds">
-          <mat-icon>bug_report</mat-icon> {{ showIds ? 'Ocultar IDs' : 'Ver IDs' }}
-        </button>
+        </mat-chip-set>        
       </div>
 
       <mat-progress-bar *ngIf="cargando()" mode="indeterminate"></mat-progress-bar>

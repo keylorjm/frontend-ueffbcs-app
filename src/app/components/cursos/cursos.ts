@@ -64,7 +64,7 @@ import { MateriaService } from '../../services/materia.service';
       <mat-card class="card">
         <mat-progress-bar *ngIf="cargando()" mode="indeterminate"></mat-progress-bar>
 
-        <div class="list" *ngIf="cursos()?.length; else vacio">
+        <div class="list" *ngIf="cursos().length; else vacio">
           <mat-card class="item" *ngFor="let c of cursos()">
             <div class="item-head">
               <!-- Nombre clickable para abrir detalles -->

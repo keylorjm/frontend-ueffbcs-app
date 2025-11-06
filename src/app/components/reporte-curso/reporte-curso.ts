@@ -142,14 +142,39 @@ interface MateriaCurso {
       </mat-card>
     </div>
   `,
-  styles: [`
-    .wrap { padding: 20px; max-width: 1100px; margin: auto; }
-    .card { padding: 16px; border-radius: 12px; display: grid; gap: 14px; }
-    .header { display: grid; grid-template-columns: 1fr auto; align-items: center; }
-    .actions { display: inline-flex; gap: 8px; }
-    .filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
-    .full-table { width: 100%; }
-  `],
+  styles: [
+    `
+      .wrap {
+        padding: 20px;
+        max-width: 1100px;
+        margin: auto;
+      }
+      .card {
+        padding: 16px;
+        border-radius: 12px;
+        display: grid;
+        gap: 14px;
+      }
+      .header {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+      }
+      .actions {
+        display: inline-flex;
+        gap: 8px;
+      }
+      .filters {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: end;
+      }
+      .full-table {
+        width: 100%;
+      }
+    `,
+  ],
 })
 export class ReporteCursoComponent implements OnInit {
   private sb = inject(MatSnackBar);
@@ -168,13 +193,19 @@ export class ReporteCursoComponent implements OnInit {
 
   cols = ['nombre', 'cedula', 'acciones'];
 
+  // ====== cache logos base64 ======
+  private logoIzqB64: string | null = null;
+  private logoDerB64: string | null = null;
+
   // ======== util progresivo (T1 -> I; T2 -> I+II; T3|FINAL -> I+II+III) =========
   private getSelectedTrimestres(): Trimestre[] {
     if (this.tipoReporte === 'FINAL' || this.tipoReporte === 'T3') return ['T1', 'T2', 'T3'];
     if (this.tipoReporte === 'T2') return ['T1', 'T2'];
     return ['T1'];
   }
-  private roman(t: Trimestre) { return t === 'T1' ? 'I' : t === 'T2' ? 'II' : 'III'; }
+  private roman(t: Trimestre) {
+    return t === 'T1' ? 'I' : t === 'T2' ? 'II' : 'III';
+  }
 
   ngOnInit() {
     this.cursoSrv.listar().subscribe({
@@ -233,13 +264,14 @@ export class ReporteCursoComponent implements OnInit {
     const c = (await firstValueFrom(this.cursoSrv.obtener(this.cursoId))) as any;
     const curso = c?.data ?? c;
 
-    const mats: { id: string; nombre: string }[] = (curso?.materias ?? []).map((m: MateriaCurso) => {
-      const id = this.asId(m.materia as any);
-      const nombre = typeof m.materia === 'string'
-        ? (m.materia as string)
-        : (m.materia?.nombre ?? '—');
-      return { id, nombre };
-    });
+    const mats: { id: string; nombre: string }[] = (curso?.materias ?? []).map(
+      (m: MateriaCurso) => {
+        const id = this.asId(m.materia as any);
+        const nombre =
+          typeof m.materia === 'string' ? (m.materia as string) : m.materia?.nombre ?? '—';
+        return { id, nombre };
+      }
+    );
 
     const map: NotaMap = {};
     for (const m of mats) map[m.id] = { nombre: m.nombre, T1: null, T2: null, T3: null };
@@ -249,20 +281,21 @@ export class ReporteCursoComponent implements OnInit {
       await Promise.all(
         mats.map(async (m) => {
           try {
-            const resp = await firstValueFrom(
+            const resp = (await firstValueFrom(
               this.caliSrv.obtenerNotas({
                 cursoId: this.cursoId,
                 anioLectivoId: this.anioLectivoId,
                 materiaId: m.id,
                 trimestre: tri,
               })
-            ) as CalificacionesGetResponse;
+            )) as CalificacionesGetResponse;
 
             const arr = resp?.estudiantes ?? [];
             const found = arr.find((x) => this.asId((x as any).estudianteId) === estId);
-            const raw = typeof (found as any)?.promedioTrimestral === 'number'
-              ? (found as any).promedioTrimestral
-              : null;
+            const raw =
+              typeof (found as any)?.promedioTrimestral === 'number'
+                ? (found as any).promedioTrimestral
+                : null;
 
             const valor = raw == null ? null : Number(raw); // divide entre 10 si tu API devuelve 0..100
             map[m.id][tri] = valor;
@@ -284,7 +317,10 @@ export class ReporteCursoComponent implements OnInit {
   private async buildAsistenciaPorTrimestre(
     estId: string
   ): Promise<Record<Trimestre, { fj: number; fi: number; laborables: number; asistidos: number }>> {
-    const out: Record<Trimestre, { fj: number; fi: number; laborables: number; asistidos: number }> = {
+    const out: Record<
+      Trimestre,
+      { fj: number; fi: number; laborables: number; asistidos: number }
+    > = {
       T1: { fj: 0, fi: 0, laborables: 0, asistidos: 0 },
       T2: { fj: 0, fi: 0, laborables: 0, asistidos: 0 },
       T3: { fj: 0, fi: 0, laborables: 0, asistidos: 0 },
@@ -302,14 +338,14 @@ export class ReporteCursoComponent implements OnInit {
     for (const t of trimestres) {
       // 1) Resumen directo del backend
       try {
-        const r = await firstValueFrom(
+        const r = (await firstValueFrom(
           this.asisSrv.getResumenTrimestre({
             cursoId: this.cursoId,
             anioLectivoId: this.anioLectivoId,
             estudianteId: estId,
             trimestre: t,
           })
-        ) as AsistenciaResumen;
+        )) as AsistenciaResumen;
 
         const fj = Number(r?.faltasJustificadas ?? 0) || 0;
         const fi = Number(r?.faltasInjustificadas ?? 0) || 0;
@@ -319,51 +355,60 @@ export class ReporteCursoComponent implements OnInit {
         out[t] = { fj, fi, laborables, asistidos };
         continue;
       } catch (err) {
-        console.warn('[reporte-curso] getResumenTrimestre falló, usando fallback por materias', { t, err });
+        console.warn('[reporte-curso] getResumenTrimestre falló, usando fallback por materias', {
+          t,
+          err,
+        });
       }
 
       // 2) Fallback: sumar por materias
-      let fj = 0, fi = 0, laborables = 0;
+      let fj = 0,
+        fi = 0,
+        laborables = 0;
 
       // Días laborables por materia
-      await Promise.all(materias.map(async (materiaId) => {
-        try {
-          const dl = await firstValueFrom(
-            this.asisSrv.getDiasLaborables({
-              cursoId: this.cursoId,
-              anioLectivoId: this.anioLectivoId,
-              materiaId,
-              trimestre: t,
-            })
-          );
-          const v = Number(dl?.diasLaborables ?? 0) || 0;
-          laborables += v;
-        } catch (err) {
-          console.warn('[reporte-curso] getDiasLaborables error', { t, materiaId, err });
-        }
-      }));
+      await Promise.all(
+        materias.map(async (materiaId) => {
+          try {
+            const dl = await firstValueFrom(
+              this.asisSrv.getDiasLaborables({
+                cursoId: this.cursoId,
+                anioLectivoId: this.anioLectivoId,
+                materiaId,
+                trimestre: t,
+              })
+            );
+            const v = Number(dl?.diasLaborables ?? 0) || 0;
+            laborables += v;
+          } catch (err) {
+            console.warn('[reporte-curso] getDiasLaborables error', { t, materiaId, err });
+          }
+        })
+      );
 
       // Faltas por materia
-      await Promise.all(materias.map(async (materiaId) => {
-        try {
-          const faltas = await firstValueFrom(
-            this.asisSrv.obtenerFaltas({
-              cursoId: this.cursoId,
-              anioLectivoId: this.anioLectivoId,
-              materiaId,
-              trimestre: t,
-            })
-          );
-          const arr = faltas?.estudiantes ?? [];
-          const mine = arr.find((x) => this.asId((x as any).estudianteId) === estId);
-          if (mine) {
-            fj += Number((mine as any).faltasJustificadas ?? 0) || 0;
-            fi += Number((mine as any).faltasInjustificadas ?? 0) || 0;
+      await Promise.all(
+        materias.map(async (materiaId) => {
+          try {
+            const faltas = await firstValueFrom(
+              this.asisSrv.obtenerFaltas({
+                cursoId: this.cursoId,
+                anioLectivoId: this.anioLectivoId,
+                materiaId,
+                trimestre: t,
+              })
+            );
+            const arr = faltas?.estudiantes ?? [];
+            const mine = arr.find((x) => this.asId((x as any).estudianteId) === estId);
+            if (mine) {
+              fj += Number((mine as any).faltasJustificadas ?? 0) || 0;
+              fi += Number((mine as any).faltasInjustificadas ?? 0) || 0;
+            }
+          } catch (err) {
+            console.warn('[reporte-curso] obtenerFaltas error', { t, materiaId, err });
           }
-        } catch (err) {
-          console.warn('[reporte-curso] obtenerFaltas error', { t, materiaId, err });
-        }
-      }));
+        })
+      );
 
       const asistidos = Math.max(0, laborables - fi);
       out[t] = { fj, fi, laborables, asistidos };
@@ -374,7 +419,7 @@ export class ReporteCursoComponent implements OnInit {
   }
 
   // =========================
-  // PDF
+  // PDF helpers (logos + formatos)
   // =========================
   private format2(n: number | null | undefined): string {
     if (n == null || isNaN(Number(n))) return '—';
@@ -385,7 +430,7 @@ export class ReporteCursoComponent implements OnInit {
     row: { T1?: number | null; T2?: number | null; T3?: number | null },
     trimestres: Trimestre[]
   ): number | null {
-    const vals = trimestres.map(t => row[t] ?? null).filter(v => v != null) as number[];
+    const vals = trimestres.map((t) => row[t] ?? null).filter((v) => v != null) as number[];
     if (!vals.length) return null;
     return vals.reduce((a, b) => a + b, 0) / vals.length;
   }
@@ -401,14 +446,54 @@ export class ReporteCursoComponent implements OnInit {
     return finals.reduce((a, b) => a + b, 0) / finals.length;
   }
 
+  /** Convierte una imagen (ruta assets) a base64 */
+  private async getBase64ImageFromURL(url: string): Promise<string> {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  /** Asegura logos cargados una sola vez */
+  private async ensureLogos() {
+    try {
+      if (!this.logoIzqB64) {
+        this.logoIzqB64 = await this.getBase64ImageFromURL('assets/img/logo_ministerio.png');
+      }
+    } catch {
+      console.warn('No se pudo cargar logo izquierdo');
+      this.logoIzqB64 = '';
+    }
+    try {
+      if (!this.logoDerB64) {
+        this.logoDerB64 = await this.getBase64ImageFromURL('assets/img/logo_unidad.png');
+      }
+    } catch {
+      console.warn('No se pudo cargar logo derecho');
+      this.logoDerB64 = '';
+    }
+  }
+
+  // =========================
+  // Generación PDF
+  // =========================
   async generarPdf(est: Estudiante) {
     if (!this.cursoId || !this.anioLectivoId) {
       this.sb.open('Falta seleccionar curso', 'Cerrar', { duration: 2000 });
       throw new Error('Curso/anioLectivo faltante');
     }
 
+    await this.ensureLogos(); // <- cargar logos (caché)
+
     const estId = this.asId((est as any)._id ?? (est as any).uid);
-    const curso = (this.cursos().find((c) => this.asId(c._id) === this.cursoId) ?? { nombre: '—' }) as any;
+    const curso = (this.cursos().find((c) => this.asId(c._id) === this.cursoId) ?? {
+      nombre: '—',
+    }) as any;
+    const tutor = curso?.profesorTutor?.nombre ?? curso?.profesorTutor ?? '—';
 
     const notasMap = await this.buildNotasMapaPorEstudiante(estId);
     const asis = await this.buildAsistenciaPorTrimestre(estId);
@@ -420,19 +505,24 @@ export class ReporteCursoComponent implements OnInit {
     const bodyNotas: any[] = [
       [
         { text: 'ASIGNATURA', bold: true },
-        ...trimestres.map(t => ({ text: this.roman(t), bold: true })),
+        ...trimestres.map((t) => ({ text: this.roman(t), bold: true })),
         { text: 'PROMEDIO', bold: true },
       ],
     ];
 
-    const filasMateria: { nombre: string; T1?: number | null; T2?: number | null; T3?: number | null }[] = [];
+    const filasMateria: {
+      nombre: string;
+      T1?: number | null;
+      T2?: number | null;
+      T3?: number | null;
+    }[] = [];
     for (const mid of materiaIds) {
       const row = notasMap[mid];
       filasMateria.push({ nombre: row.nombre, T1: row.T1, T2: row.T2, T3: row.T3 });
 
       bodyNotas.push([
         row.nombre,
-        ...trimestres.map(t => this.format2((row as any)[t] ?? null)),
+        ...trimestres.map((t) => this.format2((row as any)[t] ?? null)),
         this.format2(this.promedioMateriaSeleccion(row, trimestres)),
       ]);
     }
@@ -461,14 +551,20 @@ export class ReporteCursoComponent implements OnInit {
     }
 
     const widthsDias = ['*', ...trimestres.map(() => 70)];
-    const diasHeader: any[] = [{ text: 'DÍAS ASISTIDOS', bold: true },
-      ...trimestres.map(t => ({ text: this.roman(t), alignment: 'center', bold: true }))
+    const diasHeader: any[] = [
+      { text: 'DÍAS ASISTIDOS', bold: true },
+      ...trimestres.map((t) => ({ text: this.roman(t), alignment: 'center', bold: true })),
     ];
-    const diasRow: any[] = ['',
-      ...trimestres.map(t => ({ text: `${asis[t].asistidos} / ${asis[t].laborables}`, alignment: 'center' }))
+    const diasRow: any[] = [
+      '',
+      ...trimestres.map((t) => ({
+        text: `${asis[t].asistidos} / ${asis[t].laborables}`,
+        alignment: 'center',
+      })),
     ];
 
-    const titulo = this.tipoReporte === 'FINAL' ? 'REPORTE FINAL' : `REPORTE TRIMESTRAL (${this.tipoReporte})`;
+    const titulo =
+      this.tipoReporte === 'FINAL' ? 'REPORTE FINAL' : `REPORTE TRIMESTRAL (${this.tipoReporte})`;
     const institucion = {
       nombreL1: environment.school?.titleLine1 ?? 'UNIDAD EDUCATIVA',
       nombreL2: environment.school?.titleLine2 ?? '“FRAY BARTOLOMÉ DE LAS CASAS - SALASACA”',
@@ -483,18 +579,85 @@ export class ReporteCursoComponent implements OnInit {
       pageSize: 'A4',
       pageMargins: [32, 32, 32, 40],
       content: [
-        { text: institucion.nombreL1, bold: true, alignment: 'center', fontSize: 11 },
-        { text: institucion.nombreL2, alignment: 'center', margin: [0, 2, 0, 2] },
-        { text: institucion.lema, alignment: 'center', italics: true, fontSize: 9, margin: [0, 0, 0, 8] },
-        { text: `AMIE: ${institucion.amie}`, alignment: 'center', fontSize: 9, margin: [0, 0, 0, 10] },
-        { text: titulo, alignment: 'center', bold: true, fontSize: 12, margin: [0, 0, 0, 12] },
+        // === Encabezado: logos + textos centrados al mismo nivel ===
+        {
+          columns: [
+            // Logo izquierdo
+            this.logoIzqB64 ? { image: this.logoIzqB64, width: 90 } : { text: '', width: 90 },
 
-        { text: `AÑO LECTIVO: ${institucion.anioLectivo}    JORNADA: ${institucion.jornada}`, fontSize: 10 },
-        { text: `GRADO/CURSO: ${curso?.nombre ?? '—'}    NIVEL/SUBNIVEL: ${institucion.nivel}`, fontSize: 10, margin: [0, 0, 0, 8] },
+            // Centro: pila de textos
+            {
+              width: '*',
+              alignment: 'center',
+              stack: [
+                { text: institucion.nombreL1, bold: true, fontSize: 11 },
+                { text: institucion.nombreL2, margin: [0, 2, 0, 2] },
+                { text: institucion.lema, italics: true, fontSize: 9, margin: [0, 0, 0, 2] },
+                { text: `AMIE: ${institucion.amie}`, fontSize: 9, margin: [0, 0, 0, 6] },
+                { text: titulo, bold: true, fontSize: 12 },
+              ],
+            },
 
-        { text: `NOMBRE DEL/LA ESTUDIANTE: ${est.nombre}     CÉDULA: ${est.cedula}`, fontSize: 10, margin: [0, 0, 0, 10] },
+            // Logo derecho
+            this.logoDerB64
+              ? { image: this.logoDerB64, width: 50, alignment: 'right' }
+              : { text: '', width: 50 },
+          ],
+          columnGap: 10,
+          margin: [0, 0, 0, 12], // espacio debajo del encabezado
+        },
 
-        // Notas
+        {
+          text: `AÑO LECTIVO: ${institucion.anioLectivo}`,
+          alignment: 'center',
+          fontSize: 10,
+        },
+        {
+          text: `JORNADA: ${institucion.jornada}`,
+          alignment: 'center',
+          fontSize: 10,
+        },
+
+        {
+          text: `GRADO/CURSO: ${curso?.nombre ?? '—'}`,
+          alignment: 'center',
+          fontSize: 10,
+          
+        },
+        {
+          text: ` NIVEL/SUBNIVEL: ${institucion.nivel}`,
+          alignment: 'center',
+          fontSize: 10,
+          
+        },
+
+      
+        {
+          text: `FECHA: ${new Date().toLocaleDateString('es-EC', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })}`,
+          fontSize: 9,
+          alignment: 'center',
+          italics: true,
+          
+        },
+
+        {
+          text: `TUTOR: ${curso?.profesorTutor?.nombre ?? curso?.profesorTutor ?? '—'}`,
+          fontSize: 10,
+          alignment: 'center',
+          
+        },
+          {
+          text: `NOMBRE DEL/LA ESTUDIANTE: ${est.nombre}`,
+          fontSize: 10,
+          alignment: 'center',
+          margin: [0, 0, 0, 8],
+        },
+
+        // Notas   ********************
         {
           table: { headerRows: 1, widths: notasWidths, body: bodyNotas },
           layout: 'lightHorizontalLines',

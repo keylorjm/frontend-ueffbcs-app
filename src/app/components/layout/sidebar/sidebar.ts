@@ -51,9 +51,13 @@ import { FormsModule } from '@angular/forms';
           <span matListItemTitle>Dashboard</span>
         </a>
 
-        <a mat-list-item routerLink="/app/profesor-notas" routerLinkActive="active-link">
+        <a mat-list-item routerLink="/app/admin-notas" routerLinkActive="active-link">
           <mat-icon matListItemIcon>edit_square</mat-icon>
           <span matListItemTitle>Calificaciones</span>
+        </a>
+         <a mat-list-item routerLink="/app/admin-asistencias" routerLinkActive="active-link">
+          <mat-icon matListItemIcon>edit_square</mat-icon>
+          <span matListItemTitle>Asistencias</span>
         </a>
 
         <a mat-list-item routerLink="/app/anio-lectivo" routerLinkActive="active-link">

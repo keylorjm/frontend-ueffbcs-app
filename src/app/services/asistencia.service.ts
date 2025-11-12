@@ -8,8 +8,8 @@ export type Trimestre = 'T1' | 'T2' | 'T3';
 
 export interface FaltasRow {
   estudianteId: string;
-  faltasJustificadas: number;     // >= 0
-  faltasInjustificadas: number;   // >= 0
+  faltasJustificadas: number; // >= 0
+  faltasInjustificadas: number; // >= 0
 }
 export interface AsistenciaResumen {
   faltasJustificadas: number;
@@ -31,36 +31,57 @@ export class AsistenciaService {
 
   /** Obtiene los días laborables configurados para un curso/materia/trimestre */
   getDiasLaborables(params: {
-    cursoId: string; anioLectivoId: string; materiaId: string; trimestre: Trimestre;
+    cursoId: string;
+    anioLectivoId: string;
+    materiaId: string;
+    trimestre: Trimestre;
   }): Observable<{ diasLaborables: number | null }> {
     let p = new HttpParams()
       .set('cursoId', params.cursoId)
       .set('anioLectivoId', params.anioLectivoId)
       .set('materiaId', params.materiaId)
       .set('trimestre', params.trimestre);
-    return this.http.get<{ diasLaborables: number | null }>(`${this.baseUrl}/laborables`, { params: p });
+    return this.http.get<{ diasLaborables: number | null }>(`${this.baseUrl}/laborables`, {
+      params: p,
+    });
   }
 
   /** Establece/actualiza los días laborables para un curso/materia/trimestre */
   setDiasLaborables(payload: {
-    cursoId: string; anioLectivoId: string; materiaId: string; trimestre: Trimestre; diasLaborables: number;
+    cursoId: string;
+    anioLectivoId: string;
+    materiaId: string;
+    trimestre: Trimestre;
+    diasLaborables: number;
   }) {
     return this.http.post<any>(`${this.baseUrl}/laborables`, payload);
   }
 
   /** Devuelve las faltas existentes (por estudiante) para un curso/materia/trimestre */
   obtenerFaltas(params: {
-    cursoId: string; anioLectivoId: string; materiaId: string; trimestre: Trimestre;
-  }): Observable<{ estudiantes: Array<{estudianteId: string; faltasJustificadas: number; faltasInjustificadas: number}> }> {
+    cursoId: string;
+    anioLectivoId: string;
+    materiaId: string;
+    trimestre: Trimestre;
+  }): Observable<{
+    estudiantes: Array<{
+      estudianteId: string;
+      faltasJustificadas: number;
+      faltasInjustificadas: number;
+    }>;
+  }> {
     let p = new HttpParams()
       .set('cursoId', params.cursoId)
       .set('anioLectivoId', params.anioLectivoId)
       .set('materiaId', params.materiaId)
       .set('trimestre', params.trimestre);
-    return this.http.get<{ estudiantes: Array<{estudianteId: string; faltasJustificadas: number; faltasInjustificadas: number}> }>(
-      `${this.baseUrl}`,
-      { params: p }
-    );
+    return this.http.get<{
+      estudiantes: Array<{
+        estudianteId: string;
+        faltasJustificadas: number;
+        faltasInjustificadas: number;
+      }>;
+    }>(`${this.baseUrl}`, { params: p });
   }
 
   /** Guarda en bloque las faltas (justificadas/injustificadas) por estudiante para el trimestre */
@@ -82,5 +103,29 @@ export class AsistenciaService {
 
     return this.http.get<AsistenciaResumen>(`${this.baseUrl}/resumen`, { params: p });
   }
-
+  // Al final de la clase AsistenciaService
+  guardarFaltasUna(params: {
+    cursoId: string;
+    anioLectivoId: string;
+    materiaId: string;
+    trimestre: Trimestre;
+    estudianteId: string;
+    faltasJustificadas: number;
+    faltasInjustificadas: number;
+  }) {
+    const payload = {
+      cursoId: params.cursoId,
+      anioLectivoId: params.anioLectivoId,
+      materiaId: params.materiaId,
+      trimestre: params.trimestre,
+      rows: [
+        {
+          estudianteId: params.estudianteId,
+          faltasJustificadas: params.faltasJustificadas,
+          faltasInjustificadas: params.faltasInjustificadas,
+        },
+      ],
+    };
+    return this.guardarFaltasBulk(payload);
+  }
 }

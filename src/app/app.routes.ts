@@ -68,44 +68,51 @@ export const routes: Routes = [
         path: 'estudiantes',
         canActivate: [AdminGuard],
         loadComponent: () =>
-          import('./components/estudiantes/estudiantes').then(
-            (m) => m.EstudiantesComponent
-          ),
+          import('./components/estudiantes/estudiantes').then((m) => m.EstudiantesComponent),
         title: 'Gestión de Estudiantes',
       },
       {
         path: 'calificaciones',
         canActivate: [AdminGuard],
         loadComponent: () =>
-          import('./components/calificaciones/calificaciones').then(
-            (m) => m.Calificaciones
-          ),
+          import('./components/calificaciones/calificaciones').then((m) => m.Calificaciones),
         title: 'Ingreso de Calificaciones',
       },
       {
         path: 'cursos',
         canActivate: [AdminGuard],
-        loadComponent: () =>
-          import('./components/cursos/cursos').then((m) => m.CursosComponent),
+        loadComponent: () => import('./components/cursos/cursos').then((m) => m.CursosComponent),
         title: 'Gestión de Cursos',
       },
       {
         path: 'materias',
         canActivate: [AdminGuard],
         loadComponent: () =>
-          import('./components/materias/materias').then(
-            (m) => m.MateriasComponent
-          ),
+          import('./components/materias/materias').then((m) => m.MateriasComponent),
         title: 'Gestión de Materias',
       },
       {
         path: 'boletin',
         canActivate: [AdminGuard],
         loadComponent: () =>
-          import('./components/reporte-curso/reporte-curso').then(
-            (m) => m.ReporteCursoComponent
-          ),
+          import('./components/reporte-curso/reporte-curso').then((m) => m.ReporteCursoComponent),
         title: 'Reportes Académicos',
+      },
+      {
+        path: 'admin-notas',
+        canActivate: [AdminGuard],
+        loadComponent: () =>
+          import('./components/admin-notas/admin-notas').then((m) => m.AdminNotasComponent),
+        title: 'Registrar notas (Admin)',
+      },
+      {
+        path: 'admin-asistencias',
+        canActivate: [AdminGuard],
+        loadComponent: () =>
+          import('./components/admin-asistencias/admin-asistencias').then(
+            (m) => m.AdminAsistenciasComponent
+          ),
+        title: 'Registrar asistencias (Admin)',
       },
 
       // ============================

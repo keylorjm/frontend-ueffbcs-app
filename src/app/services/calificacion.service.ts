@@ -170,4 +170,28 @@ export class CalificacionService {
     if (n >= 6) return 'Regular';
     return 'Insuficiente';
   }
+
+  // Al final de la clase CalificacionService
+cargarTrimestreUna(params: {
+  cursoId: string;
+  anioLectivoId: string;
+  materiaId: string;
+  trimestre: Trimestre;
+  estudianteId: string;
+  promedioTrimestral: number | null;
+}) {
+  const payload: BulkTrimestrePayload10 = {
+    cursoId: params.cursoId,
+    anioLectivoId: params.anioLectivoId,
+    materiaId: params.materiaId,
+    trimestre: params.trimestre,
+    rows: [{
+      estudianteId: params.estudianteId,
+      promedioTrimestral: params.promedioTrimestral
+    }]
+  };
+  return this.cargarTrimestreBulk(payload);
 }
+
+}
+

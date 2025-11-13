@@ -114,6 +114,24 @@ export const routes: Routes = [
           ),
         title: 'Registrar asistencias (Admin)',
       },
+      {
+        path: 'admin-promociones',
+        canActivate: [AdminGuard],
+        loadComponent: () =>
+          import('./components/admin-promociones/admin-promociones').then(
+            (m) => m.AdminPromocionesComponent
+          ),
+        title: 'Promociones (Admin)',
+      },
+      {
+        path: 'admin-matriculas',
+        canActivate: [AdminGuard],
+        loadComponent: () =>
+          import('./components/admin-matricula-masiva/admin-matricula-masiva').then(
+            (m) => m.AdminMatriculaMasivaComponent
+          ),
+        title: 'Promociones (Admin)',
+      },
 
       // ============================
       // PROFESOR

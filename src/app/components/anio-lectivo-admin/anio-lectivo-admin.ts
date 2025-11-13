@@ -1,820 +1,318 @@
-// src/app/components/anio-lectivo-admin/anio-lectivo-admin.component.ts
-import { Component, inject, signal, OnInit, TemplateRef, ViewChild } from '@angular/core';
+// src/app/components/anio-lectivo-admin/anio-lectivo-admin.ts
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 
-// Material
 import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatTableModule } from '@angular/material/table';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
-import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatMenuModule } from '@angular/material/menu';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { MatChipsModule } from '@angular/material/chips';
 
 import { AnioLectivoService, AnioLectivo } from '../../services/anio-lectivo.service';
-import { map } from 'rxjs/operators';
-
-// SweetAlert2
-import Swal from 'sweetalert2';
-
-type UIAnio = AnioLectivo & { anioInicio?: number; anioFin?: number };
 
 @Component({
   selector: 'app-anio-lectivo-admin',
   standalone: true,
   imports: [
     CommonModule,
-    ReactiveFormsModule,
+    FormsModule,
     MatCardModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
     MatButtonModule,
     MatIconModule,
-    MatTableModule,
-    MatProgressBarModule,
+    MatSnackBarModule,
     MatDividerModule,
-    MatTooltipModule,
-    MatMenuModule,
-    MatDialogModule,
-    MatChipsModule,
   ],
   template: `
-    <section class="wrap">
-      <!-- Header -->
+  <div class="wrap">
+    <mat-card class="card">
       <div class="header">
-        <div class="title-wrap">
-          <h1 class="title">Años lectivos</h1>
-          <span class="subtitle">Administra periodos académicos y marca el actual</span>
+        <div class="eyebrow">
+          <mat-icon>calendar_today</mat-icon>
+          Años lectivos
         </div>
+        <h2>Gestión de años lectivos</h2>
+      </div>
+
+      <div class="form-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Nombre</mat-label>
+          <input matInput [(ngModel)]="form.nombre" placeholder="Sierra 2025-2026" />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Fecha inicio (ISO)</mat-label>
+          <input matInput [(ngModel)]="form.fechaInicio" placeholder="2025-09-01" />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Fecha fin (ISO)</mat-label>
+          <input matInput [(ngModel)]="form.fechaFin" placeholder="2026-07-15" />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Orden</mat-label>
+          <input matInput type="number" [(ngModel)]="form.orden" placeholder="1" />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Estado</mat-label>
+          <mat-select [(ngModel)]="form.activo">
+            <mat-option [value]="true">Activo</mat-option>
+            <mat-option [value]="false">Inactivo</mat-option>
+          </mat-select>
+        </mat-form-field>
+
         <div class="actions">
-          <div class="search">
-            <mat-icon class="search-icon">search</mat-icon>
-            <input
-              class="search-input"
-              placeholder="Buscar por nombre o año…"
-              [value]="filtro()"
-              (input)="filtro.set($any($event.target).value)"
-            />
-            <button
-              class="search-clear"
-              *ngIf="filtro()"
-              (click)="filtro.set('')"
-              aria-label="Limpiar"
-            >
-              <mat-icon>close</mat-icon>
-            </button>
-          </div>
-
-          <button mat-icon-button (click)="recargar()" [disabled]="isBusy()" matTooltip="Refrescar">
-            <mat-icon>refresh</mat-icon>
+          <button mat-flat-button color="primary" (click)="guardar()">
+            <mat-icon>save</mat-icon>
+            {{ editId ? 'Actualizar' : 'Crear' }}
           </button>
-
-          <button
-            mat-raised-button
-            color="primary"
-            class="btn-primary"
-            (click)="abrirCrear()"
-            [disabled]="isBusy()"
-          >
-            <mat-icon>add</mat-icon>
-            Agregar
+          <button mat-stroked-button (click)="limpiar()">
+            <mat-icon>clear</mat-icon>
+            Limpiar
           </button>
         </div>
       </div>
 
-      <!-- Card contenedor -->
-      <mat-card class="card mat-elevation-z1">
-        <mat-progress-bar *ngIf="isBusy()" mode="indeterminate"></mat-progress-bar>
+      <mat-divider></mat-divider>
 
-        <!-- Tabla estilo captura -->
-        <div class="table-wrap table-slim">
-          <table
-            mat-table
-            [dataSource]="filtrados()"
-            [trackBy]="trackById"
-            class="table compact modern-table"
-          >
-            <!-- Nombre -->
-            <ng-container matColumnDef="nombre">
-              <th mat-header-cell *matHeaderCellDef>Nombre</th>
-              <td mat-cell *matCellDef="let r">
-                <div class="cell-nombre">
-                  <span class="nombre">{{ r.nombre }}</span>
-                  <span *ngIf="r.actual" class="pill pill-blue">Actual</span>
-                </div>
-              </td>
-            </ng-container>
-
-            <!-- Año -->
-            <ng-container matColumnDef="rango">
-              <th mat-header-cell *matHeaderCellDef>Año</th>
-              <td mat-cell *matCellDef="let r">
-                {{ r.anioInicio ?? year(r.fechaInicio) }} — {{ r.anioFin ?? year(r.fechaFin) }}
-              </td>
-            </ng-container>
-
-            <!-- Estado -->
-            <ng-container matColumnDef="estado">
-              <th mat-header-cell *matHeaderCellDef>Estado</th>
-              <td mat-cell *matCellDef="let r">
-                <span
-                  class="pill"
-                  [class.pill-green]="r.activo !== false"
-                  [class.pill-gray]="r.activo === false"
-                >
-                  {{ r.activo === false ? 'Inactivo' : 'Activo' }}
-                </span>
-              </td>
-            </ng-container>
-
-            <!-- Acciones -->
-            <ng-container matColumnDef="acciones">
-              <th mat-header-cell *matHeaderCellDef class="text-right">Acciones</th>
-              <td mat-cell *matCellDef="let r" class="text-right actions-cell">
-                <button
-                  mat-icon-button
-                  color="primary"
-                  class="icon-btn"
-                  (click)="editar(r)"
-                  [disabled]="isBusy()"
-                  matTooltip="Editar"
-                >
+      <div class="table">
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Inicio</th>
+              <th>Fin</th>
+              <th>Orden</th>
+              <th>Actual</th>
+              <th>Activo</th>
+              <th style="width:260px">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let a of anios()">
+              <td>{{ a.nombre }}</td>
+              <td>{{ a.fechaInicio | date: 'yyyy-MM-dd' }}</td>
+              <td>{{ a.fechaFin    | date: 'yyyy-MM-dd' }}</td>
+              <td>{{ a.orden ?? 0 }}</td>
+              <td>{{ a.actual ? 'Sí' : 'No' }}</td>
+              <td>{{ a.activo ? 'Sí' : 'No' }}</td>
+              <td class="row-actions">
+                <button mat-button (click)="editar(a)">
                   <mat-icon>edit</mat-icon>
+                  Editar
                 </button>
-                <button
-                  mat-icon-button
-                  color="warn"
-                  class="icon-btn"
-                  (click)="confirmarEliminar(r)"
-                  [disabled]="isBusy()"
-                  matTooltip="Eliminar"
-                >
+                <button mat-button color="primary" [disabled]="a.actual" (click)="hacerActual(a)">
+                  <mat-icon>star</mat-icon>
+                  Hacer actual
+                </button>
+                <button mat-button color="warn" (click)="eliminar(a)">
                   <mat-icon>delete</mat-icon>
+                  Eliminar
                 </button>
-
-                <button
-                  mat-stroked-button
-                  color="primary"
-                  class="mark-btn"
-                  (click)="marcarComoActual(r)"
-                  [disabled]="isBusy() || r.actual"
-                >
-                  <mat-icon class="leading-icon" [class.blue]="!r.actual">check_circle</mat-icon>
-                  Marcar actual
-                </button>
-              </td>
-            </ng-container>
-
-            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-
-            <tr *ngIf="!isBusy() && filtrados().length === 0">
-              <td [attr.colspan]="displayedColumns.length" class="empty-state">
-                No hay años lectivos registrados.
               </td>
             </tr>
-          </table>
-        </div>
-      </mat-card>
-    </section>
-
-    <!-- ========== DIÁLOGO: Formulario suave (look de la captura) ========== -->
-    <ng-template #dialogForm>
-      <form [formGroup]="form" (ngSubmit)="guardar()" class="soft-form compact" novalidate>
-        <div class="soft-panel small">
-          <div class="soft-header">
-            <div class="soft-title">
-              {{ editId() ? 'Editar Año Lectivo' : 'Nuevo Año Lectivo' }}
-            </div>
-            <button
-              type="button"
-              class="soft-close"
-              (click)="cerrarDialog()"
-              [disabled]="isBusy()"
-              aria-label="Cerrar"
-            >
-              <mat-icon>close</mat-icon>
-            </button>
-          </div>
-
-          <div class="soft-body compact">
-            <label class="soft-label" for="nombre">Nombre</label>
-            <input
-              id="nombre"
-              class="ui-input"
-              formControlName="nombre"
-              placeholder="Ej. 2025 - 2026"
-              maxlength="25"
-            />
-            <div class="soft-hint">Formato: <strong>AAAA - AAAA</strong></div>
-
-            <label class="soft-label" for="anioInicio">Año inicio</label>
-            <input
-              id="anioInicio"
-              type="number"
-              class="ui-input"
-              formControlName="anioInicio"
-              placeholder="2025"
-              (input)="autoNombre()"
-            />
-
-            <label class="soft-label" for="anioFin">Año fin</label>
-            <input
-              id="anioFin"
-              type="number"
-              class="ui-input"
-              formControlName="anioFin"
-              placeholder="2026"
-              (input)="autoNombre()"
-            />
-
-            <div class="soft-errors">
-              <div class="soft-error" *ngIf="form.errors?.['rango']">
-                El año fin debe ser mayor o igual al año inicio.
-              </div>
-            </div>
-          </div>
-
-          <div class="soft-footer compact">
-            <button type="submit" class="btn-soft-primary" [disabled]="form.invalid || isBusy()">
-              Guardar
-            </button>
-            <button
-              type="button"
-              class="btn-outline"
-              (click)="cerrarDialog()"
-              [disabled]="isBusy()"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      </form>
-    </ng-template>
+          </tbody>
+        </table>
+      </div>
+    </mat-card>
+  </div>
   `,
-  styles: [
-    `
-      /* ----- Layout general ----- */
-      .wrap {
-        max-width: 980px;
-        margin: 24px auto;
-        padding: 0 12px;
-      }
-      .header {
-        display: flex;
-        align-items: flex-end;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 14px;
-      }
-      .title-wrap {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-      .title {
-        font-size: 28px;
-        font-weight: 800;
-        margin: 0;
-        letter-spacing: -0.02em;
-      }
-      .subtitle {
-        color: #6b7280;
-        font-size: 13px;
-      }
-      .actions {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .btn-primary {
-        border-radius: 12px;
-        padding-inline: 14px;
-        height: 40px;
-      }
-
-      .card {
-        border-radius: 18px;
-        padding: 0;
-        overflow: hidden;
-        position: relative;
-      }
-
-      /* ----- Search (custom, ligera) ----- */
-      .search {
-        position: relative;
-        width: 300px;
-        min-width: 220px;
-      }
-      .search-input {
-        width: 100%;
-        height: 40px;
-        border-radius: 12px;
-        padding: 0 36px 0 36px;
-        border: 1px solid #e5e7eb;
-        background: #fff;
-        outline: none;
-      }
-      .search-input:focus {
-        border-color: #c7d2fe;
-        box-shadow: 0 0 0 3px #e0e7ff;
-      }
-      .search-icon {
-        position: absolute;
-        left: 10px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: #6b7280;
-      }
-      .search-clear {
-        position: absolute;
-        right: 4px;
-        top: 50%;
-        transform: translateY(-50%);
-        height: 32px;
-        width: 32px;
-        border: none;
-        background: transparent;
-        border-radius: 8px;
-        cursor: pointer;
-        color: #6b7280;
-      }
-
-      /* ----- Tabla estilo captura ----- */
-      .table-wrap {
-        background: #fff;
-      }
-      .modern-table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0;
-      }
-      .modern-table th.mat-header-cell {
-        background: #f7f7fb;
-        font-weight: 700;
-        font-size: 13px;
-        letter-spacing: 0.02em;
-        border-bottom: 1px solid #e5e7eb;
-        padding: 10px 14px;
-        color: #111827;
-      }
-      .modern-table td.mat-cell {
-        padding: 12px 14px;
-        border-bottom: 1px solid #e5e7eb;
-      }
-      .modern-table tr.mat-row:hover td {
-        background: #fafafa;
-      }
-      .text-right {
-        text-align: right;
-      }
-      .table-slim .compact th.mat-header-cell,
-      .table-slim .compact td.mat-cell {
-        padding: 12px 14px;
-      }
-
-      .cell-nombre {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .nombre {
-        color: #111827;
-      }
-
-      .pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 2px 10px;
-        border-radius: 999px;
-        font-size: 12px;
-        line-height: 18px;
-        border: 1px solid transparent;
-      }
-      .pill-blue {
-        background: #e8efff;
-        color: #1e40af;
-        border-color: #dbe5ff;
-      }
-      .pill-green {
-        background: #e8f7ee;
-        color: #166534;
-        border-color: #d9f0e4;
-      }
-      .pill-gray {
-        background: #f3f4f6;
-        color: #374151;
-        border-color: #e5e7eb;
-      }
-
-      .actions-cell {
-        white-space: nowrap;
-      }
-      .icon-btn {
-        margin-right: 2px;
-      }
-      .mark-btn {
-        margin-left: 8px;
-        border-radius: 12px;
-        padding-inline: 12px;
-        height: 36px;
-        border-color: #d1d5db;
-      }
-      .mark-btn[disabled] {
-        color: #9ca3af !important;
-        border-color: #e5e7eb !important;
-      }
-      .leading-icon {
-        margin-right: 6px;
-        font-variation-settings: 'FILL' 0;
-      }
-      .leading-icon.blue {
-        color: #1d4ed8;
-        font-variation-settings: 'FILL' 1;
-      }
-
-      .empty-state {
-        padding: 18px;
-        text-align: center;
-        color: #6b7280;
-      }
-
-      /* ==== Versión compacta del diálogo ==== */
-      .soft-panel.small {
-        padding: 18px 22px 16px;
-        max-width: 500px;
-        margin: auto;
-        background: #f8f8fb;
-        border-radius: 20px;
-        border: 1px solid #e5e7eb;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-      }
-
-      /* Header */
-      .soft-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 2px 4px 8px;
-        margin-bottom: 4px;
-      }
-      .soft-title {
-        font-size: 21px;
-        font-weight: 800;
-        color: #111827;
-      }
-      .soft-close {
-        height: 34px;
-        width: 34px;
-        border: none;
-        background: transparent;
-        border-radius: 8px;
-        cursor: pointer;
-        color: #374151;
-      }
-      .soft-close:hover {
-        background: #f3f4f6;
-      }
-
-      /* Cuerpo */
-      .soft-body.compact {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        padding: 4px 2px 10px;
-      }
-
-      .soft-label {
-        font-weight: 600;
-        color: #111827;
-        font-size: 13.5px;
-        margin-top: 6px;
-      }
-
-      .ui-input {
-        height: 38px;
-        border-radius: 10px;
-        padding: 0 12px;
-        font-size: 14px;
-        border: 1px solid #e5e7eb;
-        background: #fff;
-        transition: border-color 0.2s, box-shadow 0.2s;
-      }
-      .ui-input:focus {
-        border-color: #93c5fd;
-        box-shadow: 0 0 0 3px #dbeafe;
-        outline: none;
-      }
-
-      .soft-hint {
-        font-size: 12px;
-        color: #6b7280;
-        margin-bottom: 6px;
-        margin-top: -2px;
-      }
-
-      .soft-error {
-        color: #b91c1c;
-        font-size: 12px;
-        margin-top: -2px;
-      }
-
-      .soft-errors {
-        margin-top: 2px;
-      }
-
-      /* Footer */
-      .soft-footer.compact {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-        margin-top: 12px;
-        padding-top: 10px;
-        border-top: 1px solid #e5e7eb;
-      }
-
-      /* Botones */
-      .btn-soft-primary {
-        height: 36px;
-        padding: 0 18px;
-        border-radius: 18px;
-        font-size: 14px;
-        font-weight: 600;
-        color: #1d4ed8;
-        background: #ffffff;
-        border: 1px solid #e5e7eb;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-        transition: all 0.2s ease;
-      }
-      .btn-soft-primary:hover:not(:disabled) {
-        background: #f9fafb;
-        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08);
-      }
-
-      .btn-outline {
-        height: 36px;
-        padding: 0 18px;
-        border-radius: 18px;
-        font-size: 14px;
-        font-weight: 600;
-        color: #1e3a8a;
-        border: 1px solid #94a3b8;
-        background: transparent;
-        transition: all 0.2s ease;
-      }
-      .btn-outline:hover:not(:disabled) {
-        background: #f1f5f9;
-        border-color: #64748b;
-      }
-    `,
-  ],
+  styles: [`
+    .wrap { padding: 8px; }
+    .card { padding: 16px; }
+    .eyebrow {
+      display:flex;
+      align-items:center;
+      gap:6px;
+      text-transform:uppercase;
+      color:#666;
+      font-size:12px;
+    }
+    .header h2 { margin: 4px 0 12px; }
+    .form-grid {
+      display:grid;
+      grid-template-columns: repeat(3, minmax(220px, 1fr));
+      gap:12px;
+      align-items:end;
+      margin-bottom:12px;
+    }
+    .actions { display:flex; gap:8px; }
+    .table table {
+      width:100%;
+      border-collapse: collapse;
+    }
+    .table th, .table td {
+      padding:8px;
+      border-bottom:1px solid #e0e0e0;
+      text-align:left;
+    }
+    .row-actions {
+      display:flex;
+      gap:6px;
+      flex-wrap: wrap;
+    }
+  `],
 })
 export class AnioLectivoAdminComponent implements OnInit {
-  private readonly svc = inject(AnioLectivoService);
-  private readonly fb = inject(FormBuilder);
-  private readonly dialog = inject(MatDialog);
+  private srv = inject(AnioLectivoService);
+  private sb  = inject(MatSnackBar);
 
-  @ViewChild('dialogForm', { static: true }) dialogFormTpl!: TemplateRef<unknown>;
+  anios = signal<AnioLectivo[]>([]);
+  editId: string | null = null;
 
-  isBusy = signal(false);
-  items = signal<UIAnio[]>([]);
-  editId = signal<string | null>(null);
-
-  displayedColumns = ['nombre', 'rango', 'estado', 'acciones'];
-  filtro = signal<string>('');
-
-  // SweetAlert2 Toast consistente con el estilo “soft/compact”
-  private readonly toast = Swal.mixin({
-    toast: true,
-    position: 'top-end',
-    showConfirmButton: false,
-    timer: 2000,
-    timerProgressBar: true,
-  });
-
-  // Form tipado y nonNullable
-  form = this.fb.nonNullable.group(
-    {
-      nombre: this.fb.nonNullable.control<string>('', {
-        validators: [Validators.required, Validators.minLength(4)],
-      }),
-      anioInicio: this.fb.nonNullable.control<string>('', {
-        validators: [Validators.required, Validators.pattern(/^[0-9]{4}$/)],
-      }),
-      anioFin: this.fb.nonNullable.control<string>('', {
-        validators: [Validators.required, Validators.pattern(/^[0-9]{4}$/)],
-      }),
-    },
-    {
-      validators: (fg) => {
-        const ini = Number(fg.get('anioInicio')?.value);
-        const fin = Number(fg.get('anioFin')?.value);
-        return isFinite(ini) && isFinite(fin) && fin < ini ? { rango: true } : null;
-      },
-    }
-  );
-
-  get c() {
-    return this.form.controls;
-  }
+  form: Partial<AnioLectivo> = {
+    nombre: '',
+    fechaInicio: '',
+    fechaFin: '',
+    activo: true,
+    orden: undefined,
+  };
 
   ngOnInit(): void {
-    this.cargar();
+    this.load();
   }
 
-  // Helpers
-  trackById = (_: number, r: UIAnio) => r._id ?? r.nombre;
-
-  // Datos
-  recargar(): void {
-    this.cargar(true);
-  }
-
-  private cargar(showToast = false): void {
-    this.isBusy.set(true);
-    this.svc
-      .getAll()
-      .pipe(
-        map((rows) =>
-          (rows ?? []).map(
-            (r) =>
-              ({
-                ...r,
-                anioInicio: this.year(r.fechaInicio),
-                anioFin: this.year(r.fechaFin),
-              } as UIAnio)
-          )
-        )
-      )
-      .subscribe({
-        next: (rows) => {
-          this.items.set(rows);
-          if (showToast) this.toast.fire({ icon: 'success', title: 'Datos actualizados' });
-          this.isBusy.set(false);
-        },
-        error: (e) => {
-          this.isBusy.set(false);
-          this.toast.fire({
-            icon: 'error',
-            title: e?.error?.message || 'Error cargando años lectivos',
-          });
-        },
-      });
-  }
-
-  year(v?: string): number | undefined {
-    if (!v) return undefined;
-    const m = /^(\d{4})/.exec(v);
-    return m ? Number(m[1]) : undefined;
-  }
-
-  private asStr(v?: number): string {
-    return v == null ? '' : String(v);
-  }
-
-  // Filtro
-  filtrados(): UIAnio[] {
-    const q = this.filtro().trim().toLowerCase();
-    if (!q) return this.items();
-    return this.items().filter((r) => {
-      const nombre = (r.nombre || '').toLowerCase();
-      const rango = `${r.anioInicio ?? this.year(r.fechaInicio)} ${
-        r.anioFin ?? this.year(r.fechaFin)
-      }`.toLowerCase();
-      return nombre.includes(q) || rango.includes(q);
+  load(): void {
+    this.srv.getAll().subscribe({
+      next: (rs) =>
+        this.anios.set((rs ?? []).sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))),
+      error: () => this.anios.set([]),
     });
   }
 
-  // Dialog
-  private dialogRef?: any;
-
-  abrirCrear(): void {
-    this.editId.set(null);
-    this.form.reset();
-    this.dialogRef = this.dialog.open(this.dialogFormTpl, {
-      panelClass: 'dialog-panel',
-      autoFocus: 'dialog',
-    });
-  }
-  cerrarDialog(): void {
-    this.dialogRef?.close();
+  limpiar(): void {
+    this.editId = null;
+    this.form = {
+      nombre: '',
+      fechaInicio: '',
+      fechaFin: '',
+      activo: true,
+      orden: undefined,
+    };
   }
 
-  editar(r: UIAnio): void {
-    this.editId.set(r._id ?? null);
-    this.form.patchValue({
-      nombre: r.nombre,
-      anioInicio: this.asStr(r.anioInicio ?? this.year(r.fechaInicio)),
-      anioFin: this.asStr(r.anioFin ?? this.year(r.fechaFin)),
-    });
-    this.dialogRef = this.dialog.open(this.dialogFormTpl, {
-      panelClass: 'dialog-panel',
-      autoFocus: 'dialog',
-    });
-  }
-
-  autoNombre(): void {
-    const ini = this.form.value.anioInicio;
-    const fin = this.form.value.anioFin;
-    if (/^\d{4}$/.test(String(ini)) && /^\d{4}$/.test(String(fin))) {
-      const current = String(this.form.value.nombre || '');
-      const suggested = `${ini} - ${fin}`;
-      if (!current || /^\d{4}\s*-\s*\d{4}$/.test(current)) {
-        this.form.patchValue({ nombre: suggested }, { emitEvent: false });
-      }
-    }
+  editar(a: AnioLectivo): void {
+    this.editId = a._id;
+    this.form = {
+      nombre: a.nombre,
+      fechaInicio: a.fechaInicio?.slice(0, 10),
+      fechaFin: a.fechaFin?.slice(0, 10),
+      activo: a.activo ?? true,
+      orden: a.orden ?? undefined,
+    };
   }
 
   guardar(): void {
-    if (this.form.invalid) {
-      this.toast.fire({ icon: 'info', title: 'Revisa los campos del formulario' });
+    const payload: any = { ...this.form };
+
+    if (!payload.nombre || !payload.fechaInicio || !payload.fechaFin) {
+      this.sb.open('Nombre y fechas son obligatorios', 'Cerrar', { duration: 2200 });
       return;
     }
-    const payload = {
-      nombre: String(this.form.value.nombre),
-      anioInicio: Number(this.form.value.anioInicio),
-      anioFin: Number(this.form.value.anioFin),
-    };
-    this.isBusy.set(true);
-    const id = this.editId();
-    const obs = id ? this.svc.update(id, payload) : this.svc.create(payload);
-    obs.subscribe({
+
+    // Si no se escribió orden, calculamos max+1
+    if (payload.orden == null || payload.orden === '') {
+      const maxOrden = this.anios().reduce((max, a) => {
+        const v = a.orden ?? 0;
+        return v > max ? v : max;
+      }, 0);
+      payload.orden = maxOrden + 1;
+    } else {
+      payload.orden = Number(payload.orden) || 0;
+    }
+
+    if (this.editId) {
+      // UPDATE
+      this.srv.update(this.editId, payload).subscribe({
+        next: () => {
+          this.sb.open('Año actualizado', 'Cerrar', { duration: 1800 });
+          // Evitar ExpressionChanged -> movemos cambios al siguiente tick
+          setTimeout(() => {
+            this.limpiar();
+            this.load();
+          });
+        },
+        error: (e) => {
+          const status = e?.status;
+          const msg = e?.error?.message;
+          if (status === 409) {
+            this.sb.open(
+              msg ?? 'Conflicto: ya existe un año con ese nombre u orden',
+              'Cerrar',
+              { duration: 3000 }
+            );
+          } else {
+            this.sb.open(msg ?? 'Error al actualizar', 'Cerrar', {
+              duration: 2500,
+            });
+          }
+        },
+      });
+    } else {
+      // CREATE
+      this.srv.create(payload).subscribe({
+        next: () => {
+          this.sb.open('Año creado', 'Cerrar', { duration: 1800 });
+          // Evitar ExpressionChanged
+          setTimeout(() => {
+            this.limpiar();
+            this.load();
+          });
+        },
+        error: (e) => {
+          const status = e?.status;
+          const msg = e?.error?.message;
+          if (status === 409) {
+            this.sb.open(
+              msg ?? 'Conflicto: ya existe un año con ese nombre u orden',
+              'Cerrar',
+              { duration: 3000 }
+            );
+          } else {
+            this.sb.open(msg ?? 'Error al crear', 'Cerrar', {
+              duration: 2500,
+            });
+          }
+        },
+      });
+    }
+  }
+
+  hacerActual(a: AnioLectivo): void {
+    this.srv.setActual(a._id).subscribe({
       next: () => {
-        this.toast.fire({
-          icon: 'success',
-          title: id ? 'Año lectivo actualizado' : 'Año lectivo creado',
-        });
-        this.form.reset();
-        this.cerrarDialog();
-        this.cargar();
+        this.sb.open('Año marcado como actual', 'Cerrar', { duration: 1800 });
+        // De nuevo, diferimos para evitar NG0100
+        setTimeout(() => this.load());
       },
-      error: (e) => {
-        this.isBusy.set(false);
-        this.toast.fire({ icon: 'error', title: e?.error?.message || 'Error guardando' });
-      },
+      error: (e) =>
+        this.sb.open(
+          e?.error?.message ?? 'No se pudo marcar como actual',
+          'Cerrar',
+          { duration: 2500 }
+        ),
     });
   }
 
-  confirmarEliminar(r: AnioLectivo): void {
-    Swal.fire({
-      title: 'Eliminar año lectivo',
-      html: `¿Seguro que deseas eliminar <b>"${r.nombre}"</b>? Esta acción no se puede deshacer.`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Eliminar',
-      cancelButtonText: 'Cancelar',
-      reverseButtons: true,
-      confirmButtonColor: '#dc2626', // rojo warn
-      cancelButtonColor: '#94a3b8',  // gris outline
-      buttonsStyling: true,
-    }).then((res) => {
-      if (res.isConfirmed) this.eliminar(r);
-    });
-  }
-
-  eliminar(r: AnioLectivo): void {
-    if (!r?._id) {
-      this.toast.fire({ icon: 'error', title: 'No se encontró el identificador del registro.' });
-      return;
-    }
-    this.isBusy.set(true);
-    const nombreEliminado = r.nombre;
-
-    this.svc.delete(r._id).subscribe({
+  eliminar(a: AnioLectivo): void {
+    if (!confirm(`Eliminar ${a.nombre}?`)) return;
+    this.srv.delete(a._id).subscribe({
       next: () => {
-        this.toast.fire({
-          icon: 'success',
-          title: `El año lectivo "${nombreEliminado}" ha sido eliminado.`,
-        });
-        this.cargar();
+        this.sb.open('Eliminado', 'Cerrar', { duration: 1800 });
+        setTimeout(() => this.load());
       },
-      error: (e) => {
-        this.isBusy.set(false);
-        const msg = e?.error?.message || `Error eliminando el año lectivo "${nombreEliminado}".`;
-        this.toast.fire({ icon: 'error', title: msg });
-      },
-    });
-  }
-
-  marcarComoActual(r: AnioLectivo): void {
-    if (r.actual) return;
-    if (!r?._id) {
-      this.toast.fire({ icon: 'error', title: 'No se encontró el identificador del registro.' });
-      return;
-    }
-    this.isBusy.set(true);
-    this.svc.setActual(r._id).subscribe({
-      next: () => {
-        this.toast.fire({ icon: 'success', title: `"${r.nombre}" marcado como actual` });
-        this.cargar();
-      },
-      error: (e) => {
-        this.isBusy.set(false);
-        this.toast.fire({ icon: 'error', title: e?.error?.message || 'Error al marcar como actual' });
-      },
+      error: (e) =>
+        this.sb.open(e?.error?.message ?? 'No se pudo eliminar', 'Cerrar', {
+          duration: 2500,
+        }),
     });
   }
 }

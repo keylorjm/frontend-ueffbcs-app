@@ -10,7 +10,8 @@ export interface AnioLectivo {
   fechaInicio: string; // ISO
   fechaFin: string;    // ISO
   actual: boolean;
-  activo?: boolean;    // si tu schema lo tiene, vendrá aquí
+  activo?: boolean;
+  orden?: number;      // 👈 NUEVO
 }
 
 type CreatePayload = {
@@ -21,6 +22,7 @@ type CreatePayload = {
   fechaFin?: string;
   actual?: boolean;
   activo?: boolean;
+  orden?: number;      // 👈 NUEVO
 };
 
 type UpdatePayload = Partial<CreatePayload>;
@@ -28,9 +30,9 @@ type UpdatePayload = Partial<CreatePayload>;
 @Injectable({ providedIn: 'root' })
 export class AnioLectivoService {
   private api = inject(ApiService);
-  private base = 'aniolectivo'; // http://localhost:5000/api/aniolectivo
+  private base = 'aniolectivo'; // http://.../api/aniolectivo
 
-  /** 🔹 Normaliza años numéricos a fechas ISO */
+  /** 🔹 Normaliza años numéricos a fechas ISO (y pasa orden si viene) */
   private normalizePayload(input: CreatePayload | UpdatePayload): any {
     const out: any = { ...input };
 
@@ -46,8 +48,7 @@ export class AnioLectivoService {
     return out;
   }
 
-  /** =================== Lectura =================== */
-
+  // ===== Lectura =====
   getAll(): Observable<AnioLectivo[]> {
     return this.api.get<{ ok: boolean; data: AnioLectivo[] }>(this.base).pipe(
       map(res => res.data ?? [])
@@ -65,8 +66,7 @@ export class AnioLectivoService {
       .pipe(map(res => res.data ?? null));
   }
 
-  /** =================== Escritura =================== */
-
+  // ===== Escritura =====
   create(payload: CreatePayload): Observable<AnioLectivo> {
     const body = this.normalizePayload(payload);
     return this.api.post<{ ok: boolean; data: AnioLectivo }>(this.base, body).pipe(
@@ -88,9 +88,8 @@ export class AnioLectivoService {
   }
 
   setActual(id: string) {
-  // Usa PUT porque ya tienes ese alias en tu router
-  return this.api
-    .put<{ ok: boolean; data: AnioLectivo }>(`${this.base}/${id}/actual`, {})
-    .pipe(map(res => res.data));
-}
+    return this.api
+      .put<{ ok: boolean; data: AnioLectivo }>(`${this.base}/${id}/actual`, {})
+      .pipe(map(res => res.data));
+  }
 }
